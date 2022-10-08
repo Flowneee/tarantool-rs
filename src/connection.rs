@@ -1,41 +1,78 @@
-use tokio::{
-    io::AsyncReadExt,
-    net::{TcpStream, ToSocketAddrs},
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Arc,
 };
-use tokio_util::codec::Framed;
-use tracing::trace;
 
 use crate::{
-    codec::{ClientCodec, IProtoGreeting},
+    channel::ChannelTx,
+    codec::{
+        request::{IProtoPing, IProtoRequest, IProtoRequestBody},
+        response::IProtoResponseBody,
+    },
     errors::Error,
+    ConnectionBuilder,
 };
 
+#[derive(Clone)]
 pub struct Connection {
-    inner: Framed<TcpStream, ClientCodec>,
+    inner: Arc<ConnectionInner>,
+}
+
+struct ConnectionInner {
+    chan_tx: ChannelTx,
+    next_sync: AtomicU32,
+    next_stream_id: AtomicU32,
 }
 
 impl Connection {
-    // TODO: builder
-    // TODO: maybe hide?
-    pub async fn new<A: ToSocketAddrs>(addr: A) -> Result<Self, Error> {
-        let mut tcp = TcpStream::connect(addr).await?;
-
-        let mut greeting_buffer = [0u8; 128];
-        tcp.read_exact(&mut greeting_buffer).await?;
-        let greeting = IProtoGreeting::decode_unchecked(&greeting_buffer);
-        trace!("Salt: {:?}", greeting.salt);
-
-        // TODO: send PING to test connection
-
-        Ok(Self {
-            inner: Framed::new(tcp, ClientCodec::default()),
-        })
+    /// Create new [`ConnectionBuilder`].
+    pub fn builder() -> ConnectionBuilder {
+        ConnectionBuilder::default()
     }
 
-    // TODO: Remove
-    #[doc(hidden)]
-    #[deprecated = "This function should not be part of public API"]
-    pub fn inner(&mut self) -> &mut Framed<TcpStream, ClientCodec> {
-        &mut self.inner
+    pub(crate) fn new(chan_tx: ChannelTx) -> Self {
+        Self {
+            inner: Arc::new(ConnectionInner {
+                chan_tx,
+                next_sync: AtomicU32::new(0),
+                // TODO: check if 0 is valid value
+                next_stream_id: AtomicU32::new(0),
+            }),
+        }
+    }
+
+    async fn send_request(
+        &self,
+        body: impl IProtoRequestBody,
+        stream_id: Option<u32>,
+    ) -> Result<rmpv::Value, Error> {
+        let resp = self
+            .inner
+            .chan_tx
+            .send(IProtoRequest::new(self.next_sync(), body, stream_id))
+            .await?;
+        match resp.body {
+            IProtoResponseBody::Ok(x) => Ok(x),
+            IProtoResponseBody::Error {
+                code,
+                description,
+                extra,
+            } => Err(Error::response(code, description, extra)),
+        }
+    }
+
+    // TODO: maybe other Ordering??
+    fn next_sync(&self) -> u32 {
+        self.inner.next_sync.fetch_add(1, Ordering::SeqCst)
+    }
+
+    // TODO: maybe other Ordering??
+    fn next_stream_id(&self) -> u32 {
+        self.inner.next_stream_id.fetch_add(1, Ordering::SeqCst)
+    }
+
+    /// Send PING request ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#iproto-ping-0x40)).
+    pub async fn ping(&self) -> Result<(), Error> {
+        self.send_request(IProtoPing {}, None).await.map(drop)
     }
 }

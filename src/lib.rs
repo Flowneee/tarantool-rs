@@ -3,12 +3,15 @@
 //  - [ ] remove main.rs
 //  - [ ] tests
 //  - [ ] bump version to 0.1.0
+//  - [ ] remove unused dependencies
 
 pub use rmpv::Value;
 
-pub use self::errors::Error;
+pub use self::{builder::ConnectionBuilder, connection::Connection, errors::ChannelError};
 
-pub mod codec;
-pub mod connection;
-
+mod builder;
+mod channel;
+// TODO: export codec for those who want to write custom connectors
+mod codec;
+mod connection;
 mod errors;

@@ -4,7 +4,7 @@ use rmp::{decode::ValueReadError, Marker};
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::{debug, trace};
 
-use crate::errors::Error;
+use crate::errors::ChannelError;
 
 use self::{request::IProtoRequest, response::IProtoResponse};
 
@@ -27,7 +27,7 @@ impl Default for LengthDecoder {
 impl LengthDecoder {
     // TODO: this function uses hidden internal functions from rmp (read_data_*)
     // need to rewrite this
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<usize>, Error> {
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<usize>, ChannelError> {
         if src.is_empty() {
             return Ok(None);
         }
@@ -92,7 +92,7 @@ pub struct ClientCodec {
 impl Decoder for ClientCodec {
     type Item = IProtoResponse;
 
-    type Error = Error;
+    type Error = ChannelError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         let next_frame_length = if let Some(x) = self.length_decoder.decode(src)? {
@@ -111,7 +111,7 @@ impl Decoder for ClientCodec {
 }
 
 impl Encoder<IProtoRequest> for ClientCodec {
-    type Error = Error;
+    type Error = ChannelError;
 
     // To omit creating intermediate BytesMut, encode message with 0 as length,
     // and after encoding calculate size of the encoded messages and overwrite

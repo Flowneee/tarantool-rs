@@ -3,7 +3,7 @@ use std::io::Read;
 use anyhow::anyhow;
 use tracing::debug;
 
-use crate::{codec::consts::keys, errors::Error};
+use crate::{codec::consts::keys, errors::ChannelError};
 
 // TODO: add out-of-band (I.e. IPROTO_CHUNK)
 // TODO: actually implement extra error data
@@ -29,7 +29,7 @@ pub struct IProtoResponse {
 impl IProtoResponse {
     // TODO: get rid of `Error =` bound
     // TODO: split function
-    pub fn decode(mut buf: impl Read) -> Result<Self, Error> {
+    pub fn decode(mut buf: impl Read) -> Result<Self, ChannelError> {
         // let marker = rmp::decode::read_marker(cur).unwrap();
         // println!("Marker: {:?}", marker);
         // TODO: validate that next value is map
@@ -57,12 +57,12 @@ impl IProtoResponse {
             }
         }
         let response_code = response_code.ok_or_else(|| {
-            Error::MessagePackDecode(anyhow!("Missing response code in response"))
+            ChannelError::MessagePackDecode(anyhow!("Missing response code in response"))
         })?;
-        let sync =
-            sync.ok_or_else(|| Error::MessagePackDecode(anyhow!("Missing sync in response")))?;
+        let sync = sync
+            .ok_or_else(|| ChannelError::MessagePackDecode(anyhow!("Missing sync in response")))?;
         let schema_version = schema_version.ok_or_else(|| {
-            Error::MessagePackDecode(anyhow!("Missing schema version in response"))
+            ChannelError::MessagePackDecode(anyhow!("Missing schema version in response"))
         })?;
         let body = match response_code {
             0x0 => IProtoResponseBody::Ok(rmpv::decode::read_value(&mut buf)?),
@@ -79,14 +79,14 @@ impl IProtoResponse {
                             let str_len = rmp::decode::read_str_len(&mut buf)?;
                             let mut str_buf = vec![0; str_len as usize];
                             let _ = buf.read_exact(&mut str_buf).map_err(|e| {
-                                Error::MessagePackDecode(anyhow!(
+                                ChannelError::MessagePackDecode(anyhow!(
                                     "Failed to decode error description: {}",
                                     e
                                 ))
                             })?;
                             // TODO: find a way to to this safe
                             description = Some(String::from_utf8(str_buf).map_err(|e| {
-                                Error::MessagePackDecode(anyhow!(
+                                ChannelError::MessagePackDecode(anyhow!(
                                     "Message description is not valid UTF-8 string: {}",
                                     e
                                 ))
@@ -102,7 +102,9 @@ impl IProtoResponse {
                     }
                 }
                 let description = description.ok_or_else(|| {
-                    Error::MessagePackDecode(anyhow!("Missing error description in response body"))
+                    ChannelError::MessagePackDecode(anyhow!(
+                        "Missing error description in response body"
+                    ))
                 })?;
                 IProtoResponseBody::Error {
                     code,
@@ -112,7 +114,7 @@ impl IProtoResponse {
             }
             // TODO: maybe separate error for this?
             rest => {
-                return Err(Error::MessagePackDecode(anyhow!(
+                return Err(ChannelError::MessagePackDecode(anyhow!(
                     "Unknown response code: {}",
                     rest
                 )))

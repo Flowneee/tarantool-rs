@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::errors::Error;
+use crate::errors::ChannelError;
 
 use super::consts::{keys, IProtoType};
 
@@ -11,7 +11,7 @@ pub trait IProtoRequestBody: 'static + Send {
         Self: Sized;
 
     /// Encode body into MessagePack and write it to provided [`Write`].
-    fn encode(&self, buf: &mut dyn Write) -> Result<(), Error>;
+    fn encode(&self, buf: &mut dyn Write) -> Result<(), ChannelError>;
 }
 
 // TODO: hide fields and export them via getters
@@ -24,27 +24,17 @@ pub struct IProtoRequest {
 }
 
 impl IProtoRequest {
-    pub fn new<Body: IProtoRequestBody>(sync: u32, body: Body) -> Self {
+    pub fn new<Body: IProtoRequestBody>(sync: u32, body: Body, stream_id: Option<u32>) -> Self {
         Self {
             request_type: Body::request_type(),
             sync,
             schema_version: None,
-            stream_id: None,
+            stream_id,
             body: Box::new(body),
         }
     }
 
-    pub fn with_schema_version(mut self, schema_version: u32) -> Self {
-        self.schema_version = Some(schema_version);
-        self
-    }
-
-    pub fn with_stream_id(mut self, stream_id: u32) -> Self {
-        self.stream_id = Some(stream_id);
-        self
-    }
-
-    pub fn encode(&self, mut buf: impl Write) -> Result<(), Error> {
+    pub fn encode(&self, mut buf: impl Write) -> Result<(), ChannelError> {
         let map_len = 2
             + if self.schema_version.is_some() { 1 } else { 0 }
             + if self.stream_id.is_some() { 1 } else { 0 };
@@ -75,7 +65,7 @@ impl IProtoRequestBody for IProtoPing {
     }
 
     // NOTE: `&mut buf: mut` is required since I don't get why compiler complain
-    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), Error> {
+    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), ChannelError> {
         rmp::encode::write_map_len(&mut buf, 0)?;
         Ok(())
     }

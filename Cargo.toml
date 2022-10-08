@@ -4,7 +4,6 @@ description = "Asyncronous tokio-based client for Tarantool"
 version = "0.0.0"
 edition = "2021"
 authors = ["Andrey Kononov flowneee3@gmail.com"]
-edition = "2021"
 license = "MIT"
 keywords = ["tarantool"]
 categories = ["database"]
@@ -26,5 +25,3 @@ tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", default-features = false, features = ["codec"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
-
-
