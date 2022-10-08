@@ -4,7 +4,11 @@ use tarantool_rs::Connection;
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let connection = Connection::builder().build("127.0.0.1:3301").await.unwrap();
+    let connection = Connection::builder()
+        .auth("guest", None)
+        .build("127.0.0.1:3301")
+        .await
+        .unwrap();
     tokio::try_join!(connection.ping(), connection.ping()).unwrap();
     connection.clone().ping().await.unwrap();
 }

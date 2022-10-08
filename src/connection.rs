@@ -6,7 +6,7 @@ use std::sync::{
 use crate::{
     channel::ChannelTx,
     codec::{
-        request::{IProtoPing, IProtoRequest, IProtoRequestBody},
+        request::{IProtoAuth, IProtoPing, IProtoRequest, IProtoRequestBody},
         response::IProtoResponseBody,
     },
     errors::Error,
@@ -74,5 +74,17 @@ impl Connection {
     /// Send PING request ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#iproto-ping-0x40)).
     pub async fn ping(&self) -> Result<(), Error> {
         self.send_request(IProtoPing {}, None).await.map(drop)
+    }
+
+    /// Send AUTH request ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#iproto-auth-0x07)).
+    pub(crate) async fn auth(
+        &self,
+        user: String,
+        password: Option<String>,
+        salt: Vec<u8>,
+    ) -> Result<(), Error> {
+        self.send_request(IProtoAuth::new(user, password, salt), None)
+            .await
+            .map(drop)
     }
 }

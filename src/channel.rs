@@ -47,7 +47,9 @@ pub(crate) struct Channel {
 impl Channel {
     // TODO: builder
     // TODO: maybe hide?
-    pub(crate) async fn new<A: ToSocketAddrs>(addr: A) -> Result<(Self, ChannelTx), ChannelError> {
+    pub(crate) async fn new<A: ToSocketAddrs>(
+        addr: A,
+    ) -> Result<(Self, ChannelTx, Vec<u8>), ChannelError> {
         let mut tcp = TcpStream::connect(addr).await?;
 
         let mut greeting_buffer = [0u8; 128];
@@ -64,6 +66,7 @@ impl Channel {
                 in_flights: HashMap::with_capacity(5),
             },
             ChannelTx { inner: tx },
+            greeting.salt,
         ))
     }
 
