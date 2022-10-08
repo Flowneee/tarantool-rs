@@ -1,0 +1,9 @@
+services:
+  tarantool:
+    image: tarantool/tarantool
+    volumes:
+      - tarantool-storage:/opt/tarantool
+    ports:
+      - "3301:3301"
+volumes:
+  tarantool-storage:
