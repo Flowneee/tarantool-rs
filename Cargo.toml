@@ -12,6 +12,7 @@ repository = "https://github.com/Flowneee/tarantool-rs"
 
 [dependencies]
 anyhow = "1"
+async-trait = "0.1"
 base64 = "0.13"
 bytes = "1"
 futures = "0.3"

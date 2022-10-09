@@ -7,11 +7,16 @@
 
 pub use rmpv::Value;
 
-pub use self::{builder::ConnectionBuilder, connection::Connection, errors::ChannelError};
+pub use self::{
+    builder::ConnectionBuilder, connection::Connection, connection_like::ConnectionLike,
+    errors::ChannelError, stream::Stream,
+};
 
 mod builder;
 mod channel;
 // TODO: export codec for those who want to write custom connectors
 mod codec;
 mod connection;
+mod connection_like;
 mod errors;
+mod stream;

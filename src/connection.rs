@@ -6,6 +6,7 @@ use std::{
     },
 };
 
+use async_trait::async_trait;
 use rmpv::Value;
 
 use crate::{
@@ -18,8 +19,9 @@ use crate::{
         response::IProtoResponseBody,
         utils::data_from_response_body,
     },
+    connection_like::ConnectionLike,
     errors::Error,
-    ConnectionBuilder,
+    ConnectionBuilder, Stream,
 };
 
 #[derive(Clone)]
@@ -49,12 +51,12 @@ impl Connection {
                 chan_tx,
                 next_sync: AtomicU32::new(0),
                 // TODO: check if 0 is valid value
-                next_stream_id: AtomicU32::new(0),
+                next_stream_id: AtomicU32::new(1),
             }),
         }
     }
 
-    async fn send_request(
+    pub(crate) async fn send_request(
         &self,
         body: impl IProtoRequestBody,
         stream_id: Option<u32>,
@@ -75,13 +77,18 @@ impl Connection {
     }
 
     // TODO: maybe other Ordering??
-    fn next_sync(&self) -> u32 {
+    pub(crate) fn next_sync(&self) -> u32 {
         self.inner.next_sync.fetch_add(1, Ordering::SeqCst)
     }
 
     // TODO: maybe other Ordering??
-    fn next_stream_id(&self) -> u32 {
-        self.inner.next_stream_id.fetch_add(1, Ordering::SeqCst)
+    pub(crate) fn next_stream_id(&self) -> u32 {
+        let next = self.inner.next_stream_id.fetch_add(1, Ordering::SeqCst);
+        if next != 0 {
+            next
+        } else {
+            self.inner.next_stream_id.fetch_add(1, Ordering::SeqCst)
+        }
     }
 
     /// Send AUTH request ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#iproto-auth-0x07)).
@@ -102,28 +109,18 @@ impl Connection {
         self.send_request(features, None).await.map(drop)
     }
 
-    /// Send PING request ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#iproto-ping-0x40)).
-    pub async fn ping(&self) -> Result<(), Error> {
-        self.send_request(IProtoPing {}, None).await.map(drop)
+    pub fn stream(&self) -> Stream {
+        Stream::new(self.clone(), self.next_stream_id())
+    }
+}
+
+#[async_trait]
+impl ConnectionLike for Connection {
+    async fn send_request(&self, body: impl IProtoRequestBody) -> Result<Value, Error> {
+        self.send_request(body, None).await
     }
 
-    pub async fn eval(
-        &self,
-        expr: impl Into<Cow<'static, str>>,
-        args: Vec<Value>,
-    ) -> Result<Value, Error> {
-        let body = self.send_request(IProtoEval::new(expr, args), None).await?;
-        Ok(data_from_response_body(body)?)
-    }
-
-    pub async fn call(
-        &self,
-        function_name: impl Into<Cow<'static, str>>,
-        args: Vec<Value>,
-    ) -> Result<Value, Error> {
-        let body = self
-            .send_request(IProtoCall::new(function_name, args), None)
-            .await?;
-        Ok(data_from_response_body(body)?)
+    fn stream(&self) -> Stream {
+        self.stream()
     }
 }
