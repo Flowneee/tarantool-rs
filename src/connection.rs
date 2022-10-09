@@ -11,7 +11,10 @@ use rmpv::Value;
 use crate::{
     channel::ChannelTx,
     codec::{
-        request::{IProtoAuth, IProtoEval, IProtoId, IProtoPing, IProtoRequest, IProtoRequestBody},
+        request::{
+            IProtoAuth, IProtoCall, IProtoEval, IProtoId, IProtoPing, IProtoRequest,
+            IProtoRequestBody,
+        },
         response::IProtoResponseBody,
         utils::data_from_response_body,
     },
@@ -110,6 +113,17 @@ impl Connection {
         args: Vec<Value>,
     ) -> Result<Value, Error> {
         let body = self.send_request(IProtoEval::new(expr, args), None).await?;
+        Ok(data_from_response_body(body)?)
+    }
+
+    pub async fn call(
+        &self,
+        function_name: impl Into<Cow<'static, str>>,
+        args: Vec<Value>,
+    ) -> Result<Value, Error> {
+        let body = self
+            .send_request(IProtoCall::new(function_name, args), None)
+            .await?;
         Ok(data_from_response_body(body)?)
     }
 }

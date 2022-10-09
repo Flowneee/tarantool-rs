@@ -23,6 +23,7 @@ impl ConnectionBuilder {
         tokio::spawn(run_channel(chan));
         let conn = Connection::new(chan_tx);
 
+        // TODO: add option to disable pre 2.10 features (ID request, streams, watchers)
         let features = IProtoId::default();
         debug!(
             "Setting supported features: VERSION - {}, STREAMS - {}, TRANSACTIONS - {}, ERROR_EXTENSION - {}, WATCHERS = {}",

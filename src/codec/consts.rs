@@ -10,6 +10,7 @@ pub mod keys {
     pub const SCHEMA_VERSION: u8 = 0x05;
     pub const STREAM_ID: u8 = 0x0a;
     pub const TUPLE: u8 = 0x21;
+    pub const FUNCTION_NAME: u8 = 0x22;
     pub const USER_NAME: u8 = 0x23;
     pub const EXPR: u8 = 0x27;
     pub const DATA: u8 = 0x30;
