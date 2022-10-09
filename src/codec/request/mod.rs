@@ -1,4 +1,4 @@
-pub use self::{auth::IProtoAuth, id::IProtoId, ping::IProtoPing};
+pub use self::{auth::IProtoAuth, eval::IProtoEval, id::IProtoId, ping::IProtoPing};
 
 use std::io::Write;
 
@@ -6,6 +6,7 @@ use super::consts::{keys, IProtoType};
 use crate::errors::ChannelError;
 
 mod auth;
+mod eval;
 mod id;
 mod ping;
 

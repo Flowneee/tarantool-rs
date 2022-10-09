@@ -11,6 +11,8 @@ pub mod keys {
     pub const STREAM_ID: u8 = 0x0a;
     pub const TUPLE: u8 = 0x21;
     pub const USER_NAME: u8 = 0x23;
+    pub const EXPR: u8 = 0x27;
+    pub const DATA: u8 = 0x30;
     pub const ERROR_24: u8 = 0x31;
     pub const ERROR: u8 = 0x52;
     pub const VERSION: u8 = 0x54;

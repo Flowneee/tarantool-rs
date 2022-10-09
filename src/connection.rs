@@ -1,13 +1,19 @@
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Arc,
+use std::{
+    borrow::Cow,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
 };
+
+use rmpv::Value;
 
 use crate::{
     channel::ChannelTx,
     codec::{
-        request::{IProtoAuth, IProtoId, IProtoPing, IProtoRequest, IProtoRequestBody},
+        request::{IProtoAuth, IProtoEval, IProtoId, IProtoPing, IProtoRequest, IProtoRequestBody},
         response::IProtoResponseBody,
+        utils::data_from_response_body,
     },
     errors::Error,
     ConnectionBuilder,
@@ -22,6 +28,10 @@ struct ConnectionInner {
     chan_tx: ChannelTx,
     next_sync: AtomicU32,
     next_stream_id: AtomicU32,
+    // TODO: add features disabling
+    //streams_supported: bool,
+    //transactions_supported: bool,
+    //watchers_supported: bool,
 }
 
 impl Connection {
@@ -45,7 +55,7 @@ impl Connection {
         &self,
         body: impl IProtoRequestBody,
         stream_id: Option<u32>,
-    ) -> Result<rmpv::Value, Error> {
+    ) -> Result<Value, Error> {
         let resp = self
             .inner
             .chan_tx
@@ -71,11 +81,6 @@ impl Connection {
         self.inner.next_stream_id.fetch_add(1, Ordering::SeqCst)
     }
 
-    /// Send PING request ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#iproto-ping-0x40)).
-    pub async fn ping(&self) -> Result<(), Error> {
-        self.send_request(IProtoPing {}, None).await.map(drop)
-    }
-
     /// Send AUTH request ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#iproto-auth-0x07)).
     pub(crate) async fn auth(
         &self,
@@ -88,7 +93,23 @@ impl Connection {
             .map(drop)
     }
 
+    // TODO: return response from server
+    /// Send ID request ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#iproto-id-0x49)).
     pub(crate) async fn id(&self, features: IProtoId) -> Result<(), Error> {
         self.send_request(features, None).await.map(drop)
+    }
+
+    /// Send PING request ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#iproto-ping-0x40)).
+    pub async fn ping(&self) -> Result<(), Error> {
+        self.send_request(IProtoPing {}, None).await.map(drop)
+    }
+
+    pub async fn eval(
+        &self,
+        expr: impl Into<Cow<'static, str>>,
+        args: Vec<Value>,
+    ) -> Result<Value, Error> {
+        let body = self.send_request(IProtoEval::new(expr, args), None).await?;
+        Ok(data_from_response_body(body)?)
     }
 }

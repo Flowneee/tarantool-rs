@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use bytes::{Buf, BufMut, BytesMut};
 use rmp::{decode::ValueReadError, Marker};
 use tokio_util::codec::{Decoder, Encoder};
@@ -11,6 +10,7 @@ use self::{request::IProtoRequest, response::IProtoResponse};
 pub mod consts;
 pub mod request;
 pub mod response;
+pub mod utils;
 
 enum LengthDecoder {
     NoMarker,
