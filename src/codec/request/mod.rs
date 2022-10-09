@@ -1,5 +1,6 @@
 pub use self::{
-    auth::IProtoAuth, call::IProtoCall, eval::IProtoEval, id::IProtoId, ping::IProtoPing,
+    auth::IProtoAuth, begin::IProtoBegin, call::IProtoCall, commit::IProtoCommit, eval::IProtoEval,
+    id::IProtoId, ping::IProtoPing, rollback::IProtoRollback,
 };
 
 use std::io::Write;
@@ -8,10 +9,13 @@ use super::consts::{keys, IProtoType};
 use crate::errors::ChannelError;
 
 mod auth;
+mod begin;
 mod call;
+mod commit;
 mod eval;
 mod id;
 mod ping;
+mod rollback;
 
 pub const PROTOCOL_VERSION: u8 = 3;
 

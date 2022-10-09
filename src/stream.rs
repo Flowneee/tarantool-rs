@@ -1,7 +1,10 @@
 use async_trait::async_trait;
 use rmpv::Value;
 
-use crate::{codec::request::IProtoRequestBody, errors::Error, Connection, ConnectionLike};
+use crate::{
+    codec::request::IProtoRequestBody, errors::Error, Connection, ConnectionLike, Transaction,
+    TransactionBuilder,
+};
 
 /// Abstraction, providing sequential processing of requests.
 ///
@@ -37,13 +40,15 @@ use crate::{codec::request::IProtoRequestBody, errors::Error, Connection, Connec
 /// # }
 /// ```
 
+#[derive(Clone)]
 pub struct Stream {
     connection: Connection,
     stream_id: u32,
 }
 
 impl Stream {
-    pub(crate) fn new(conn: Connection, stream_id: u32) -> Self {
+    pub(crate) fn new(conn: Connection) -> Self {
+        let stream_id = conn.next_stream_id();
         Self {
             connection: conn,
             stream_id,
@@ -61,5 +66,13 @@ impl ConnectionLike for Stream {
 
     fn stream(&self) -> Stream {
         self.connection.stream()
+    }
+
+    fn transaction_builder(&self) -> TransactionBuilder {
+        self.connection.transaction_builder()
+    }
+
+    async fn transaction(&self) -> Result<Transaction, Error> {
+        self.connection.transaction().await
     }
 }

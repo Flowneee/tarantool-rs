@@ -18,6 +18,8 @@ pub mod keys {
     pub const ERROR: u8 = 0x52;
     pub const VERSION: u8 = 0x54;
     pub const FEATURES: u8 = 0x55;
+    pub const TIMEOUT: u8 = 0x56;
+    pub const TXN_ISOLATION: u8 = 0x59;
 }
 
 /// IPROTO command codes.
@@ -72,4 +74,26 @@ pub enum IProtoType {
     Event = 76,
     /// Non-final response type
     Chunk = 128,
+}
+
+/// Transaction isolation level.
+///
+/// See docs [here](https://www.tarantool.io/en/doc/latest/concepts/atomic/txn_mode_mvcc/#txn-mode-mvcc-options).
+#[derive(Copy, Clone, Debug)]
+#[repr(u8)]
+pub enum TransactionIsolationLevel {
+    /// Use the default level from box.cfg (default),
+    Default = 0,
+    /// Read changes that are committed but not confirmed yet.
+    ReadCommited = 1,
+    /// Read confirmed changes.
+    ReadConfirmed = 2,
+    /// Determine isolation level automatically.
+    BestEffort = 3,
+}
+
+impl Default for TransactionIsolationLevel {
+    fn default() -> Self {
+        Self::Default
+    }
 }

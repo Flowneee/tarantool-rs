@@ -19,7 +19,7 @@ pub struct IProtoId {
 impl Default for IProtoId {
     fn default() -> Self {
         Self {
-            streams: false,
+            streams: true,
             transactions: false,
             error_extension: true,
             watchers: false,

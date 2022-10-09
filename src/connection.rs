@@ -1,27 +1,25 @@
 use std::{
-    borrow::Cow,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
     },
+    time::Duration,
 };
 
 use async_trait::async_trait;
 use rmpv::Value;
+use tracing::debug;
 
 use crate::{
     channel::ChannelTx,
     codec::{
-        request::{
-            IProtoAuth, IProtoCall, IProtoEval, IProtoId, IProtoPing, IProtoRequest,
-            IProtoRequestBody,
-        },
+        consts::TransactionIsolationLevel,
+        request::{IProtoAuth, IProtoId, IProtoRequest, IProtoRequestBody},
         response::IProtoResponseBody,
-        utils::data_from_response_body,
     },
     connection_like::ConnectionLike,
     errors::Error,
-    ConnectionBuilder, Stream,
+    ConnectionBuilder, Stream, Transaction, TransactionBuilder,
 };
 
 #[derive(Clone)]
@@ -33,10 +31,9 @@ struct ConnectionInner {
     chan_tx: ChannelTx,
     next_sync: AtomicU32,
     next_stream_id: AtomicU32,
-    // TODO: add features disabling
-    //streams_supported: bool,
-    //transactions_supported: bool,
-    //watchers_supported: bool,
+    transaction_timeout_secs: Option<f64>,
+    transaction_isolation_level: TransactionIsolationLevel,
+    async_rt_handle: tokio::runtime::Handle,
 }
 
 impl Connection {
@@ -45,13 +42,22 @@ impl Connection {
         ConnectionBuilder::default()
     }
 
-    pub(crate) fn new(chan_tx: ChannelTx) -> Self {
+    pub(crate) fn new(
+        chan_tx: ChannelTx,
+        transaction_timeout: Option<Duration>,
+        transaction_isolation_level: TransactionIsolationLevel,
+    ) -> Self {
         Self {
             inner: Arc::new(ConnectionInner {
                 chan_tx,
                 next_sync: AtomicU32::new(0),
                 // TODO: check if 0 is valid value
                 next_stream_id: AtomicU32::new(1),
+                transaction_timeout_secs: transaction_timeout.as_ref().map(Duration::as_secs_f64),
+                transaction_isolation_level,
+                // NOTE: Safety: this method can be called only in async tokio context (because it
+                // is called only from ConnectionBuilder).
+                async_rt_handle: tokio::runtime::Handle::current(),
             }),
         }
     }
@@ -74,6 +80,19 @@ impl Connection {
                 extra,
             } => Err(Error::response(code, description, extra)),
         }
+    }
+
+    /// Synchronously send request to channel and drop response.
+    pub(crate) fn send_request_sync_and_forget(
+        &self,
+        body: impl IProtoRequestBody,
+        stream_id: Option<u32>,
+    ) {
+        let this = self.clone();
+        let _ = self.inner.async_rt_handle.spawn(async move {
+            let res = this.clone().send_request(body, stream_id).await;
+            debug!("Response for forgot sync request: {:?}", res);
+        });
     }
 
     // TODO: maybe other Ordering??
@@ -110,7 +129,21 @@ impl Connection {
     }
 
     pub fn stream(&self) -> Stream {
-        Stream::new(self.clone(), self.next_stream_id())
+        Stream::new(self.clone())
+    }
+
+    /// Create transaction, overriding default connection's parameters.
+    pub(crate) fn transaction_builder(&self) -> TransactionBuilder {
+        TransactionBuilder::new(
+            self.clone(),
+            self.inner.transaction_timeout_secs,
+            self.inner.transaction_isolation_level,
+        )
+    }
+
+    /// Create transaction.
+    pub(crate) async fn transaction(&self) -> Result<Transaction, Error> {
+        self.transaction_builder().begin().await
     }
 }
 
@@ -122,5 +155,13 @@ impl ConnectionLike for Connection {
 
     fn stream(&self) -> Stream {
         self.stream()
+    }
+
+    fn transaction_builder(&self) -> TransactionBuilder {
+        self.transaction_builder()
+    }
+
+    async fn transaction(&self) -> Result<Transaction, Error> {
+        self.transaction().await
     }
 }

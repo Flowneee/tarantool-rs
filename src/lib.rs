@@ -8,8 +8,12 @@
 pub use rmpv::Value;
 
 pub use self::{
-    builder::ConnectionBuilder, connection::Connection, connection_like::ConnectionLike,
-    errors::ChannelError, stream::Stream,
+    builder::ConnectionBuilder,
+    connection::Connection,
+    connection_like::ConnectionLike,
+    errors::ChannelError,
+    stream::Stream,
+    transaction::{Transaction, TransactionBuilder},
 };
 
 mod builder;
@@ -20,3 +24,4 @@ mod connection;
 mod connection_like;
 mod errors;
 mod stream;
+mod transaction;

@@ -6,11 +6,7 @@ use tracing::info;
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let connection = Connection::builder()
-        .auth("guest", None)
-        .build("127.0.0.1:3301")
-        .await
-        .unwrap();
+    let connection = Connection::builder().build("127.0.0.1:3301").await.unwrap();
     connection.clone().ping().await.unwrap();
 
     let eval_fut = connection
@@ -38,6 +34,21 @@ async fn main() {
         .call("tostring", vec![42.into()])
         .inspect(|res| info!("Call response: {:?}", res));
     let ping_fut = stream
+        .ping()
+        .inspect(|res| info!("Ping response: {:?}", res));
+    let _ = tokio::join!(eval_fut, call_fut, ping_fut);
+
+    let transaction = connection.transaction().await.unwrap();
+    let eval_fut = transaction
+        .eval(
+            "fiber = require('fiber'); fiber.sleep(0.5); return ...;",
+            vec![42.into(), "pong".into()],
+        )
+        .inspect(|res| info!("Eval response: {:?}", res));
+    let call_fut = transaction
+        .call("tostring", vec![42.into()])
+        .inspect(|res| info!("Call response: {:?}", res));
+    let ping_fut = transaction
         .ping()
         .inspect(|res| info!("Ping response: {:?}", res));
     let _ = tokio::join!(eval_fut, call_fut, ping_fut);
