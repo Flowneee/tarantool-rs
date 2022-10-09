@@ -30,11 +30,7 @@ impl IProtoResponse {
     // TODO: get rid of `Error =` bound
     // TODO: split function
     pub fn decode(mut buf: impl Read) -> Result<Self, ChannelError> {
-        // let marker = rmp::decode::read_marker(cur).unwrap();
-        // println!("Marker: {:?}", marker);
-        // TODO: validate that next value is map
         let map_len = rmp::decode::read_map_len(&mut buf)?;
-        println!("Map len: {}", map_len);
         let mut response_code: Option<u32> = None;
         let mut sync: Option<u32> = None;
         let mut schema_version: Option<u32> = None;

@@ -13,6 +13,8 @@ pub mod keys {
     pub const USER_NAME: u8 = 0x23;
     pub const ERROR_24: u8 = 0x31;
     pub const ERROR: u8 = 0x52;
+    pub const VERSION: u8 = 0x54;
+    pub const FEATURES: u8 = 0x55;
 }
 
 /// IPROTO command codes.

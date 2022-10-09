@@ -6,7 +6,7 @@ use std::sync::{
 use crate::{
     channel::ChannelTx,
     codec::{
-        request::{IProtoAuth, IProtoPing, IProtoRequest, IProtoRequestBody},
+        request::{IProtoAuth, IProtoId, IProtoPing, IProtoRequest, IProtoRequestBody},
         response::IProtoResponseBody,
     },
     errors::Error,
@@ -86,5 +86,9 @@ impl Connection {
         self.send_request(IProtoAuth::new(user, password, salt), None)
             .await
             .map(drop)
+    }
+
+    pub(crate) async fn id(&self, features: IProtoId) -> Result<(), Error> {
+        self.send_request(features, None).await.map(drop)
     }
 }

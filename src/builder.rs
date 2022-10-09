@@ -1,7 +1,9 @@
 use tokio::net::ToSocketAddrs;
+use tracing::debug;
 
 use crate::{
     channel::{run_channel, Channel},
+    codec::request::IProtoId,
     connection::Connection,
     errors::Error,
 };
@@ -10,7 +12,7 @@ use crate::{
 #[derive(Default)]
 pub struct ConnectionBuilder {
     user: Option<String>,
-    password: Option<String>, // TODO: schema version
+    password: Option<String>,
 }
 
 impl ConnectionBuilder {
@@ -20,14 +22,28 @@ impl ConnectionBuilder {
         // TODO: support setting custom executor
         tokio::spawn(run_channel(chan));
         let conn = Connection::new(chan_tx);
+
+        let features = IProtoId::default();
+        debug!(
+            "Setting supported features: VERSION - {}, STREAMS - {}, TRANSACTIONS - {}, ERROR_EXTENSION - {}, WATCHERS = {}",
+            features.protocol_version,
+            features.streams,
+            features.transactions,
+            features.error_extension,
+            features.watchers
+        );
+        conn.id(features).await?;
+
         if let Some(user) = self.user.clone() {
             conn.auth(user, self.password.clone(), salt).await?;
-        } else {
-            conn.ping().await?;
         }
+
         Ok(conn)
     }
 
+    /// Sets user login ane, optinally, password, used for this connection.
+    ///
+    /// AUTH message sent upon connecting to server.
     pub fn auth(&mut self, user: &str, password: Option<&str>) -> &mut Self {
         self.user = Some(user.into());
         self.password = password.map(Into::into);
