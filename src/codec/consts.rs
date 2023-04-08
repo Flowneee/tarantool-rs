@@ -22,14 +22,14 @@ pub mod keys {
     pub const TXN_ISOLATION: u8 = 0x59;
 }
 
-/// IPROTO command codes.
+/// Request type constants.
 ///
 /// Describes only types, used in this crate.
 ///
-/// See details [here](https://github.com/tarantool/tarantool/blob/master/src/box/iproto_constants.h#L201).
+/// See details [here](https://github.com/tarantool/tarantool/blob/master/src/box/iproto_constants.h).
 #[derive(Copy, Clone, Debug)]
 #[repr(u8)]
-pub enum IProtoType {
+pub enum RequestType {
     Ok = 0,
     Select = 1,
     Insert = 2,
@@ -50,30 +50,19 @@ pub enum IProtoType {
     Begin = 14,
     Commit = 15,
     Rollback = 16,
-    TypeStatMax,
-    Raft = 30,
-    RatPromote = 31,
-    RaftDemot = 32,
-    RaftConfirm = 40,
-    RaftRollback = 41,
     Ping = 64,
-    /// Replication JOIN command
-    Join = 65,
-    /// Replication SUBSCRIBE command
-    Subscribe = 66,
-    VoteDeprecated = 67,
-    Vote = 68,
-    FetchSnapshot = 69,
-    Register = 70,
-    JoinMeta = 71,
-    JoinSnapshot = 72,
-    /// Protocol features request
     Id = 73,
     Watch = 74,
     Unwatch = 75,
     Event = 76,
     /// Non-final response type
     Chunk = 128,
+}
+
+pub mod response_codes {
+    pub const OK: u32 = 0x0;
+    pub const ERROR_RANGE_START: u32 = 0x8000;
+    pub const ERROR_RANGE_END: u32 = 0x8FFF;
 }
 
 /// Transaction isolation level.

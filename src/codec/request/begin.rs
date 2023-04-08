@@ -5,28 +5,28 @@ use std::{borrow::Cow, io::Write};
 use rmpv::Value;
 
 use crate::{
-    codec::consts::{keys, IProtoType, TransactionIsolationLevel},
-    ChannelError,
+    codec::consts::{keys, RequestType, TransactionIsolationLevel},
+    TransportError,
 };
 
-use super::IProtoRequestBody;
+use super::RequestBody;
 
 #[derive(Clone, Debug)]
-pub struct IProtoBegin {
+pub struct Begin {
     pub timeout_secs: Option<f64>,
     pub transaction_isolation_level: TransactionIsolationLevel,
 }
 
-impl IProtoRequestBody for IProtoBegin {
-    fn request_type() -> IProtoType
+impl RequestBody for Begin {
+    fn request_type() -> RequestType
     where
         Self: Sized,
     {
-        IProtoType::Begin
+        RequestType::Begin
     }
 
     // NOTE: `&mut buf: mut` is required since I don't get why compiler complain
-    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), ChannelError> {
+    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), TransportError> {
         let map_len = if self.timeout_secs.is_some() { 2 } else { 1 };
         rmp::encode::write_map_len(&mut buf, map_len)?;
         if let Some(x) = self.timeout_secs {
@@ -39,7 +39,7 @@ impl IProtoRequestBody for IProtoBegin {
     }
 }
 
-impl IProtoBegin {
+impl Begin {
     pub fn new(
         timeout_secs: Option<f64>,
         transaction_isolation_level: TransactionIsolationLevel,

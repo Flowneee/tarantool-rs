@@ -1,13 +1,14 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use rmpv::Value;
 use tracing::debug;
 
 use crate::{
     codec::{
         consts::TransactionIsolationLevel,
-        request::{IProtoBegin, IProtoCommit, IProtoRequestBody, IProtoRollback},
+        request::{Begin, Commit, RequestBody, Rollback},
     },
     errors::Error,
     Connection, ConnectionLike, Stream,
@@ -47,7 +48,7 @@ impl Transaction {
         timeout_secs: Option<f64>,
     ) -> Result<(), Error> {
         debug!("Beginning tranasction on stream {}", self.stream_id);
-        self.send_request(IProtoBegin::new(timeout_secs, transaction_isolation_level))
+        self.send_request(Begin::new(timeout_secs, transaction_isolation_level))
             .await
             .map(drop)
     }
@@ -56,7 +57,7 @@ impl Transaction {
     pub async fn commit(mut self) -> Result<(), Error> {
         if !self.finished {
             debug!("Commiting tranasction on stream {}", self.stream_id);
-            let _ = self.send_request(IProtoCommit::default()).await?;
+            let _ = self.send_request(Commit::default()).await?;
             self.finished = true;
         }
         Ok(())
@@ -66,7 +67,7 @@ impl Transaction {
     pub async fn rollback(mut self) -> Result<(), Error> {
         if !self.finished {
             debug!("Rolling back tranasction on stream {}", self.stream_id);
-            let _ = self.send_request(IProtoRollback::default()).await?;
+            let _ = self.send_request(Rollback::default()).await?;
             self.finished = true;
         }
         Ok(())
@@ -82,7 +83,7 @@ impl Drop for Transaction {
             );
             let _ = self
                 .connection
-                .send_request_sync_and_forget(IProtoRollback::default(), Some(self.stream_id));
+                .send_request_sync_and_forget(Rollback::default(), Some(self.stream_id));
             self.finished = true;
         }
     }
@@ -90,7 +91,7 @@ impl Drop for Transaction {
 
 #[async_trait]
 impl ConnectionLike for Transaction {
-    async fn send_request(&self, body: impl IProtoRequestBody) -> Result<Value, Error> {
+    async fn send_request(&self, body: impl RequestBody) -> Result<Bytes, Error> {
         self.connection
             .send_request(body, Some(self.stream_id))
             .await

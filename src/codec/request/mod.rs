@@ -1,12 +1,12 @@
 pub use self::{
-    auth::IProtoAuth, begin::IProtoBegin, call::IProtoCall, commit::IProtoCommit, eval::IProtoEval,
-    id::IProtoId, ping::IProtoPing, rollback::IProtoRollback,
+    auth::Auth, begin::Begin, call::Call, commit::Commit, eval::Eval, id::Id, ping::Ping,
+    rollback::Rollback,
 };
 
 use std::io::Write;
 
-use super::consts::{keys, IProtoType};
-use crate::errors::ChannelError;
+use super::consts::{keys, RequestType};
+use crate::errors::TransportError;
 
 mod auth;
 mod begin;
@@ -19,27 +19,28 @@ mod rollback;
 
 pub const PROTOCOL_VERSION: u8 = 3;
 
-pub trait IProtoRequestBody: 'static + Send {
+pub trait RequestBody: 'static + Send {
     /// Return type of this request.
-    fn request_type() -> IProtoType
+    fn request_type() -> RequestType
     where
         Self: Sized;
 
     /// Encode body into MessagePack and write it to provided [`Write`].
-    fn encode(&self, buf: &mut dyn Write) -> Result<(), ChannelError>;
+    fn encode(&self, buf: &mut dyn Write) -> Result<(), TransportError>;
 }
 
 // TODO: hide fields and export them via getters
-pub struct IProtoRequest {
-    pub request_type: IProtoType,
+pub struct Request {
+    // TODO: get type from body field
+    pub request_type: RequestType,
     pub sync: u32,
     pub schema_version: Option<u32>,
     pub stream_id: Option<u32>,
-    pub body: Box<dyn IProtoRequestBody>,
+    pub body: Box<dyn RequestBody>,
 }
 
-impl IProtoRequest {
-    pub fn new<Body: IProtoRequestBody>(sync: u32, body: Body, stream_id: Option<u32>) -> Self {
+impl Request {
+    pub fn new<Body: RequestBody>(sync: u32, body: Body, stream_id: Option<u32>) -> Self {
         Self {
             request_type: Body::request_type(),
             sync,
@@ -49,7 +50,7 @@ impl IProtoRequest {
         }
     }
 
-    pub fn encode(&self, mut buf: impl Write) -> Result<(), ChannelError> {
+    pub fn encode(&self, mut buf: impl Write) -> Result<(), TransportError> {
         let map_len = 2
             + if self.schema_version.is_some() { 1 } else { 0 }
             + if self.stream_id.is_some() { 1 } else { 0 };

@@ -1,17 +1,17 @@
 use std::io::Write;
 
-use super::IProtoRequestBody;
-use crate::{codec::consts::IProtoType, ChannelError};
+use super::RequestBody;
+use crate::{codec::consts::RequestType, TransportError};
 
 #[derive(Clone, Debug)]
-pub struct IProtoPing {}
+pub struct Ping {}
 
-impl IProtoRequestBody for IProtoPing {
-    fn request_type() -> IProtoType {
-        IProtoType::Ping
+impl RequestBody for Ping {
+    fn request_type() -> RequestType {
+        RequestType::Ping
     }
 
-    fn encode(&self, _buf: &mut dyn Write) -> Result<(), ChannelError> {
+    fn encode(&self, _buf: &mut dyn Write) -> Result<(), TransportError> {
         Ok(())
     }
 }

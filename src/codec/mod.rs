@@ -3,9 +3,9 @@ use rmp::{decode::ValueReadError, Marker};
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::{debug, trace};
 
-use crate::errors::ChannelError;
+use crate::errors::TransportError;
 
-use self::{request::IProtoRequest, response::IProtoResponse};
+use self::{request::Request, response::Response};
 
 pub mod consts;
 pub mod request;
@@ -27,7 +27,7 @@ impl Default for LengthDecoder {
 impl LengthDecoder {
     // TODO: this function uses hidden internal functions from rmp (read_data_*)
     // need to rewrite this
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<usize>, ChannelError> {
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<usize>, TransportError> {
         if src.is_empty() {
             return Ok(None);
         }
@@ -90,9 +90,9 @@ pub struct ClientCodec {
 }
 
 impl Decoder for ClientCodec {
-    type Item = IProtoResponse;
+    type Item = Response;
 
-    type Error = ChannelError;
+    type Error = TransportError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         let next_frame_length = if let Some(x) = self.length_decoder.decode(src)? {
@@ -103,20 +103,20 @@ impl Decoder for ClientCodec {
         if src.len() >= next_frame_length {
             self.length_decoder.reset();
             let frame_bytes = src.split_to(next_frame_length);
-            IProtoResponse::decode(frame_bytes.reader()).map(Some)
+            Response::decode(frame_bytes.reader()).map(Some)
         } else {
             Ok(None)
         }
     }
 }
 
-impl Encoder<IProtoRequest> for ClientCodec {
-    type Error = ChannelError;
+impl Encoder<Request> for ClientCodec {
+    type Error = TransportError;
 
     // To omit creating intermediate BytesMut, encode message with 0 as length,
     // and after encoding calculate size of the encoded messages and overwrite
     // length field (0) with new data.
-    fn encode(&mut self, item: IProtoRequest, dst: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: Request, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let begin_idx = dst.len();
 
         // Write message with fictional length (0)
@@ -138,12 +138,12 @@ impl Encoder<IProtoRequest> for ClientCodec {
 ///
 /// [Docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#greeting-message).
 #[derive(Debug)]
-pub struct IProtoGreeting {
+pub struct Greeting {
     // TODO: add optional server field
     pub salt: Vec<u8>,
 }
 
-impl IProtoGreeting {
+impl Greeting {
     /// Size of the full message from server in bytes.
     pub const SIZE: usize = 128;
 

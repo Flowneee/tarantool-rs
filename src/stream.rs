@@ -1,8 +1,9 @@
 use async_trait::async_trait;
+use bytes::Bytes;
 use rmpv::Value;
 
 use crate::{
-    codec::request::IProtoRequestBody, errors::Error, Connection, ConnectionLike, Transaction,
+    codec::request::RequestBody, errors::Error, Connection, ConnectionLike, Transaction,
     TransactionBuilder,
 };
 
@@ -58,7 +59,7 @@ impl Stream {
 
 #[async_trait]
 impl ConnectionLike for Stream {
-    async fn send_request(&self, body: impl IProtoRequestBody) -> Result<Value, Error> {
+    async fn send_request(&self, body: impl RequestBody) -> Result<Bytes, Error> {
         self.connection
             .send_request(body, Some(self.stream_id))
             .await

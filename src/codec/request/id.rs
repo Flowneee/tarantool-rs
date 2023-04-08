@@ -1,14 +1,14 @@
 use std::io::Write;
 
 use crate::{
-    codec::consts::{keys, IProtoType},
-    ChannelError,
+    codec::consts::{keys, RequestType},
+    TransportError,
 };
 
-use super::{IProtoRequestBody, PROTOCOL_VERSION};
+use super::{RequestBody, PROTOCOL_VERSION};
 
 #[derive(Clone, Debug)]
-pub struct IProtoId {
+pub struct Id {
     pub streams: bool,
     pub transactions: bool,
     pub error_extension: bool,
@@ -16,7 +16,7 @@ pub struct IProtoId {
     pub protocol_version: u8,
 }
 
-impl Default for IProtoId {
+impl Default for Id {
     fn default() -> Self {
         Self {
             streams: true,
@@ -28,23 +28,23 @@ impl Default for IProtoId {
     }
 }
 
-impl IProtoId {
+impl Id {
     const STREAMS: u8 = 0;
     const TRANSACTIONS: u8 = 1;
     const ERROR_EXTENSION: u8 = 2;
     const WATCHERS: u8 = 3;
 }
 
-impl IProtoRequestBody for IProtoId {
-    fn request_type() -> IProtoType
+impl RequestBody for Id {
+    fn request_type() -> RequestType
     where
         Self: Sized,
     {
-        IProtoType::Id
+        RequestType::Id
     }
 
     // NOTE: `&mut buf: mut` is required since I don't get why compiler complain
-    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), ChannelError> {
+    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), TransportError> {
         rmp::encode::write_map_len(&mut buf, 2)?;
         rmp::encode::write_pfix(&mut buf, keys::VERSION)?;
         rmp::encode::write_u8(&mut buf, self.protocol_version)?;

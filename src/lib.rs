@@ -11,13 +11,13 @@ pub use self::{
     builder::ConnectionBuilder,
     connection::Connection,
     connection_like::ConnectionLike,
-    errors::ChannelError,
+    errors::TransportError,
     stream::Stream,
     transaction::{Transaction, TransactionBuilder},
 };
 
 mod builder;
-mod channel;
+mod transport;
 // TODO: export codec for those who want to write custom connectors
 mod codec;
 mod connection;

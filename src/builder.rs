@@ -4,10 +4,10 @@ use tokio::net::ToSocketAddrs;
 use tracing::debug;
 
 use crate::{
-    channel::{run_channel, Channel},
-    codec::{consts::TransactionIsolationLevel, request::IProtoId},
+    codec::{consts::TransactionIsolationLevel, request::Id},
     connection::Connection,
     errors::Error,
+    transport::Transport,
 };
 
 /// Build connection to Tarantool.
@@ -22,17 +22,17 @@ pub struct ConnectionBuilder {
 impl ConnectionBuilder {
     /// Create connection to Tarantool using provided address and test it using PING.
     pub async fn build<A: ToSocketAddrs>(&self, addr: A) -> Result<Connection, Error> {
-        let (chan, chan_tx, salt) = Channel::new(addr).await?;
+        let (transport, trapnsport_sender, salt) = Transport::new(addr).await?;
         // TODO: support setting custom executor
-        tokio::spawn(run_channel(chan));
+        tokio::spawn(transport.run());
         let conn = Connection::new(
-            chan_tx,
+            trapnsport_sender,
             self.transaction_timeout,
             self.transaction_isolation_level,
         );
 
         // TODO: add option to disable pre 2.10 features (ID request, streams, watchers)
-        let features = IProtoId::default();
+        let features = Id::default();
         debug!(
             "Setting supported features: VERSION - {}, STREAMS - {}, TRANSACTIONS - {}, ERROR_EXTENSION - {}, WATCHERS = {}",
             features.protocol_version,

@@ -1,20 +1,22 @@
+// Docs: https://www.tarantool.io/en/doc/latest/dev_guide/internals/iproto/authentication/
+
 use std::{cmp::min, io::Write};
 
 use sha1::{Digest, Sha1};
 
-use super::IProtoRequestBody;
+use super::RequestBody;
 use crate::{
-    codec::consts::{keys, IProtoType},
-    ChannelError,
+    codec::consts::{keys, RequestType},
+    TransportError,
 };
 
 #[derive(Clone, Debug)]
-pub struct IProtoAuth {
+pub struct Auth {
     pub user_name: String,
     pub scramble: Vec<u8>,
 }
 
-impl IProtoAuth {
+impl Auth {
     pub fn new(user: String, password: Option<String>, salt: Vec<u8>) -> Self {
         Self {
             user_name: user,
@@ -23,16 +25,16 @@ impl IProtoAuth {
     }
 }
 
-impl IProtoRequestBody for IProtoAuth {
-    fn request_type() -> IProtoType
+impl RequestBody for Auth {
+    fn request_type() -> RequestType
     where
         Self: Sized,
     {
-        IProtoType::Auth
+        RequestType::Auth
     }
 
     // NOTE: `&mut buf: mut` is required since I don't get why compiler complain
-    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), ChannelError> {
+    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), TransportError> {
         rmp::encode::write_map_len(&mut buf, 2)?;
         rmp::encode::write_pfix(&mut buf, keys::USER_NAME)?;
         rmp::encode::write_str(&mut buf, &self.user_name)?;

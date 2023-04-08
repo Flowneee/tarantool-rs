@@ -3,28 +3,28 @@ use std::{borrow::Cow, io::Write};
 use rmpv::Value;
 
 use crate::{
-    codec::consts::{keys, IProtoType},
-    ChannelError,
+    codec::consts::{keys, RequestType},
+    TransportError,
 };
 
-use super::IProtoRequestBody;
+use super::RequestBody;
 
 #[derive(Clone, Debug)]
-pub struct IProtoEval {
+pub struct Eval {
     pub expr: Cow<'static, str>,
     pub tuple: Vec<Value>,
 }
 
-impl IProtoRequestBody for IProtoEval {
-    fn request_type() -> IProtoType
+impl RequestBody for Eval {
+    fn request_type() -> RequestType
     where
         Self: Sized,
     {
-        IProtoType::Eval
+        RequestType::Eval
     }
 
     // NOTE: `&mut buf: mut` is required since I don't get why compiler complain
-    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), ChannelError> {
+    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), TransportError> {
         rmp::encode::write_map_len(&mut buf, 2)?;
         rmp::encode::write_pfix(&mut buf, keys::EXPR)?;
         rmp::encode::write_str(&mut buf, &self.expr)?;
@@ -38,7 +38,7 @@ impl IProtoRequestBody for IProtoEval {
     }
 }
 
-impl IProtoEval {
+impl Eval {
     // TODO: introduce some convenient way to pass arguments
     pub fn new(expr: impl Into<Cow<'static, str>>, args: Vec<Value>) -> Self {
         Self {

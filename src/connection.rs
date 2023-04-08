@@ -7,18 +7,19 @@ use std::{
 };
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use rmpv::Value;
 use tracing::debug;
 
 use crate::{
-    channel::ChannelTx,
     codec::{
         consts::TransactionIsolationLevel,
-        request::{IProtoAuth, IProtoId, IProtoRequest, IProtoRequestBody},
-        response::IProtoResponseBody,
+        request::{Auth, Id, Request, RequestBody},
+        response::ResponseBody,
     },
     connection_like::ConnectionLike,
     errors::Error,
+    transport::TransportSender,
     ConnectionBuilder, Stream, Transaction, TransactionBuilder,
 };
 
@@ -28,7 +29,7 @@ pub struct Connection {
 }
 
 struct ConnectionInner {
-    chan_tx: ChannelTx,
+    transport_sender: TransportSender,
     next_sync: AtomicU32,
     next_stream_id: AtomicU32,
     transaction_timeout_secs: Option<f64>,
@@ -43,13 +44,13 @@ impl Connection {
     }
 
     pub(crate) fn new(
-        chan_tx: ChannelTx,
+        transport_sender: TransportSender,
         transaction_timeout: Option<Duration>,
         transaction_isolation_level: TransactionIsolationLevel,
     ) -> Self {
         Self {
             inner: Arc::new(ConnectionInner {
-                chan_tx,
+                transport_sender,
                 next_sync: AtomicU32::new(0),
                 // TODO: check if 0 is valid value
                 next_stream_id: AtomicU32::new(1),
@@ -64,28 +65,24 @@ impl Connection {
 
     pub(crate) async fn send_request(
         &self,
-        body: impl IProtoRequestBody,
+        body: impl RequestBody,
         stream_id: Option<u32>,
-    ) -> Result<Value, Error> {
+    ) -> Result<Bytes, Error> {
         let resp = self
             .inner
-            .chan_tx
-            .send(IProtoRequest::new(self.next_sync(), body, stream_id))
+            .transport_sender
+            .send(Request::new(self.next_sync(), body, stream_id))
             .await?;
         match resp.body {
-            IProtoResponseBody::Ok(x) => Ok(x),
-            IProtoResponseBody::Error {
-                code,
-                description,
-                extra,
-            } => Err(Error::response(code, description, extra)),
+            ResponseBody::Ok(x) => Ok(x),
+            ResponseBody::Error(x) => Err(x.into()),
         }
     }
 
     /// Synchronously send request to channel and drop response.
     pub(crate) fn send_request_sync_and_forget(
         &self,
-        body: impl IProtoRequestBody,
+        body: impl RequestBody,
         stream_id: Option<u32>,
     ) {
         let this = self.clone();
@@ -117,14 +114,14 @@ impl Connection {
         password: Option<String>,
         salt: Vec<u8>,
     ) -> Result<(), Error> {
-        self.send_request(IProtoAuth::new(user, password, salt), None)
+        self.send_request(Auth::new(user, password, salt), None)
             .await
             .map(drop)
     }
 
     // TODO: return response from server
     /// Send ID request ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#iproto-id-0x49)).
-    pub(crate) async fn id(&self, features: IProtoId) -> Result<(), Error> {
+    pub(crate) async fn id(&self, features: Id) -> Result<(), Error> {
         self.send_request(features, None).await.map(drop)
     }
 
@@ -149,7 +146,7 @@ impl Connection {
 
 #[async_trait]
 impl ConnectionLike for Connection {
-    async fn send_request(&self, body: impl IProtoRequestBody) -> Result<Value, Error> {
+    async fn send_request(&self, body: impl RequestBody) -> Result<Bytes, Error> {
         self.send_request(body, None).await
     }
 
