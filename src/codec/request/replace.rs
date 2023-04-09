@@ -1,43 +1,41 @@
-use std::{borrow::Cow, io::Write};
+// TODO: unify with eval.rs
+
+use std::io::Write;
 
 use rmpv::Value;
 
 use crate::codec::{
     consts::{keys, RequestType},
-    utils::{write_kv_array, write_kv_str},
+    utils::{write_kv_array, write_kv_u32},
 };
 
 use super::RequestBody;
 
 #[derive(Clone, Debug)]
-pub(crate) struct Eval {
-    pub expr: Cow<'static, str>,
+pub(crate) struct Replace {
+    pub space_id: u32,
     pub tuple: Vec<Value>,
 }
 
-impl RequestBody for Eval {
+impl Replace {
+    pub fn new(space_id: u32, tuple: Vec<Value>) -> Self {
+        Self { space_id, tuple }
+    }
+}
+
+impl RequestBody for Replace {
     fn request_type() -> RequestType
     where
         Self: Sized,
     {
-        RequestType::Eval
+        RequestType::Replace
     }
 
     // NOTE: `&mut buf: mut` is required since I don't get why compiler complain
     fn encode(&self, mut buf: &mut dyn Write) -> Result<(), anyhow::Error> {
         rmp::encode::write_map_len(&mut buf, 2)?;
-        write_kv_str(buf, keys::EXPR, self.expr.as_ref())?;
+        write_kv_u32(buf, keys::SPACE_ID, self.space_id)?;
         write_kv_array(buf, keys::TUPLE, &self.tuple)?;
         Ok(())
-    }
-}
-
-impl Eval {
-    // TODO: introduce some convenient way to pass arguments
-    pub fn new(expr: impl Into<Cow<'static, str>>, args: Vec<Value>) -> Self {
-        Self {
-            expr: expr.into(),
-            tuple: args,
-        }
     }
 }

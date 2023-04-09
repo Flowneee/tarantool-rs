@@ -5,7 +5,7 @@ use crate::codec::consts::{keys, RequestType};
 use super::{RequestBody, PROTOCOL_VERSION};
 
 #[derive(Clone, Debug)]
-pub struct Id {
+pub(crate) struct Id {
     pub streams: bool,
     pub transactions: bool,
     pub error_extension: bool,

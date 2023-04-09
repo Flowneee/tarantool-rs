@@ -7,7 +7,7 @@ use crate::codec::consts::{keys, RequestType, TransactionIsolationLevel};
 use super::RequestBody;
 
 #[derive(Clone, Debug)]
-pub struct Begin {
+pub(crate) struct Begin {
     pub timeout_secs: Option<f64>,
     pub transaction_isolation_level: TransactionIsolationLevel,
 }
@@ -35,7 +35,7 @@ impl RequestBody for Begin {
 }
 
 impl Begin {
-    pub fn new(
+    pub(crate) fn new(
         timeout_secs: Option<f64>,
         transaction_isolation_level: TransactionIsolationLevel,
     ) -> Self {

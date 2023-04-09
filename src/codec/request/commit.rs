@@ -2,12 +2,12 @@
 
 use std::io::Write;
 
-use crate::{codec::consts::RequestType, TransportError};
+use crate::codec::consts::RequestType;
 
 use super::RequestBody;
 
 #[derive(Clone, Debug, Default)]
-pub struct Commit {}
+pub(crate) struct Commit {}
 
 impl RequestBody for Commit {
     fn request_type() -> RequestType

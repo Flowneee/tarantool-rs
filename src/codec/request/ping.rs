@@ -4,7 +4,7 @@ use super::RequestBody;
 use crate::codec::consts::RequestType;
 
 #[derive(Clone, Debug)]
-pub struct Ping {}
+pub(crate) struct Ping {}
 
 impl RequestBody for Ping {
     fn request_type() -> RequestType {

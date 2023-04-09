@@ -7,7 +7,7 @@ use crate::codec::consts::RequestType;
 use super::RequestBody;
 
 #[derive(Clone, Debug, Default)]
-pub struct Rollback {}
+pub(crate) struct Rollback {}
 
 impl RequestBody for Rollback {
     fn request_type() -> RequestType

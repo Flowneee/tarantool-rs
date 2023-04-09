@@ -1,6 +1,7 @@
-pub use self::{
-    auth::Auth, begin::Begin, call::Call, commit::Commit, eval::Eval, id::Id, ping::Ping,
-    rollback::Rollback,
+pub(crate) use self::{
+    auth::Auth, begin::Begin, call::Call, commit::Commit, delete::Delete, eval::Eval, id::Id,
+    insert::Insert, ping::Ping, replace::Replace, rollback::Rollback, select::Select,
+    update::Update, upsert::Upsert,
 };
 
 use std::io::Write;
@@ -11,13 +12,20 @@ mod auth;
 mod begin;
 mod call;
 mod commit;
+mod delete;
 mod eval;
 mod id;
+mod insert;
 mod ping;
+mod replace;
 mod rollback;
+mod select;
+mod update;
+mod upsert;
 
 pub const PROTOCOL_VERSION: u8 = 3;
 
+// TODO: docs
 pub trait RequestBody: 'static + Send {
     /// Return type of this request.
     fn request_type() -> RequestType
@@ -34,8 +42,7 @@ pub trait RequestBody: 'static + Send {
     fn encode(&self, buf: &mut dyn Write) -> Result<(), anyhow::Error>;
 }
 
-// TODO: hide fields and export them via getters
-pub struct Request {
+pub(crate) struct Request {
     // TODO: get type from body field
     pub request_type: RequestType,
     pub sync: u32,
