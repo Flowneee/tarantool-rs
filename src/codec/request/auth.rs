@@ -5,10 +5,7 @@ use std::{cmp::min, io::Write};
 use sha1::{Digest, Sha1};
 
 use super::RequestBody;
-use crate::{
-    codec::consts::{keys, RequestType},
-    TransportError,
-};
+use crate::codec::consts::{keys, RequestType};
 
 #[derive(Clone, Debug)]
 pub struct Auth {
@@ -34,7 +31,7 @@ impl RequestBody for Auth {
     }
 
     // NOTE: `&mut buf: mut` is required since I don't get why compiler complain
-    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), TransportError> {
+    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), anyhow::Error> {
         rmp::encode::write_map_len(&mut buf, 2)?;
         rmp::encode::write_pfix(&mut buf, keys::USER_NAME)?;
         rmp::encode::write_str(&mut buf, &self.user_name)?;

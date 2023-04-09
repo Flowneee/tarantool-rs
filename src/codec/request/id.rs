@@ -1,9 +1,6 @@
 use std::io::Write;
 
-use crate::{
-    codec::consts::{keys, RequestType},
-    TransportError,
-};
+use crate::codec::consts::{keys, RequestType};
 
 use super::{RequestBody, PROTOCOL_VERSION};
 
@@ -44,7 +41,7 @@ impl RequestBody for Id {
     }
 
     // NOTE: `&mut buf: mut` is required since I don't get why compiler complain
-    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), TransportError> {
+    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), anyhow::Error> {
         rmp::encode::write_map_len(&mut buf, 2)?;
         rmp::encode::write_pfix(&mut buf, keys::VERSION)?;
         rmp::encode::write_u8(&mut buf, self.protocol_version)?;

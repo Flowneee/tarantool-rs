@@ -26,27 +26,21 @@ impl ErrorResponse {
     }
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Error response: {0}")]
     Response(#[from] ErrorResponse),
+    #[error("Error while decoding response body: {0}")]
+    ResponseBodyDecode(#[source] anyhow::Error),
+    #[error("Serde deserialization error: {0}")]
+    SerdeDeserialize(#[from] rmpv::ext::Error),
     #[error("Transport error: {0}")]
-    Transport(Arc<TransportError>),
+    Transport(#[from] Arc<TransportError>),
 }
 
 impl From<TransportError> for Error {
     fn from(value: TransportError) -> Self {
-        Error::channel(value)
-    }
-}
-
-impl Error {
-    pub(crate) fn channel(value: TransportError) -> Self {
-        Self::Transport(Arc::new(value))
-    }
-
-    pub(crate) fn response(code: u32, description: String, extra: Option<rmpv::Value>) -> Self {
-        Self::Response(ErrorResponse::new(code, description, extra))
+        Error::Transport(Arc::new(value))
     }
 }
 

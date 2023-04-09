@@ -1,13 +1,13 @@
 use std::borrow::Cow;
 
 use async_trait::async_trait;
-use bytes::Bytes;
 use rmpv::Value;
+use serde::de::DeserializeOwned;
 
 use crate::{
     codec::{
         request::{Call, Eval, Ping, RequestBody},
-        utils::data_from_response_body,
+        utils::deserialize_non_sql_response,
     },
     errors::Error,
     Stream, Transaction, TransactionBuilder,
@@ -15,14 +15,11 @@ use crate::{
 
 #[async_trait]
 pub trait ConnectionLike: private::Sealed {
-    /// Send request.
-    ///
-    /// On successfull response return raw bytes which should be manually parsed
-    /// accordingly to Tarantool binary protocol.
+    /// Send request, receiving raw response body.
     ///
     /// It is not recommended to use this method directly, since some requests
     /// should be only sent in specific situations and might break connection.
-    async fn send_request(&self, body: impl RequestBody) -> Result<Bytes, Error>;
+    async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error>;
 
     /// Get new [`Stream`].
     ///
@@ -45,21 +42,22 @@ pub trait ConnectionLike: private::Sealed {
         self.send_request(Ping {}).await.map(drop)
     }
 
-    async fn eval<I>(&self, expr: I, args: Vec<Value>) -> Result<Value, Error>
+    async fn eval<I, T>(&self, expr: I, args: Vec<Value>) -> Result<T, Error>
     where
         I: Into<Cow<'static, str>> + Send,
+        T: DeserializeOwned,
     {
         let body = self.send_request(Eval::new(expr, args)).await?;
-        let parsed_body = rmpv::decode::read_value_ref(body).unwrap();
-        Ok(data_from_response_body(body)?)
+        deserialize_non_sql_response(body)
     }
 
-    async fn call<I>(&self, function_name: I, args: Vec<Value>) -> Result<Value, Error>
+    async fn call<I, T>(&self, function_name: I, args: Vec<Value>) -> Result<T, Error>
     where
         I: Into<Cow<'static, str>> + Send,
+        T: DeserializeOwned,
     {
         let body = self.send_request(Call::new(function_name, args)).await?;
-        Ok(data_from_response_body(body)?)
+        deserialize_non_sql_response(body)
     }
 }
 

@@ -59,7 +59,7 @@ impl Stream {
 
 #[async_trait]
 impl ConnectionLike for Stream {
-    async fn send_request(&self, body: impl RequestBody) -> Result<Bytes, Error> {
+    async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error> {
         self.connection
             .send_request(body, Some(self.stream_id))
             .await

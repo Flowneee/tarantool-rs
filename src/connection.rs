@@ -7,7 +7,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use bytes::Bytes;
 use rmpv::Value;
 use tracing::debug;
 
@@ -67,7 +66,7 @@ impl Connection {
         &self,
         body: impl RequestBody,
         stream_id: Option<u32>,
-    ) -> Result<Bytes, Error> {
+    ) -> Result<Value, Error> {
         let resp = self
             .inner
             .transport_sender
@@ -146,7 +145,7 @@ impl Connection {
 
 #[async_trait]
 impl ConnectionLike for Connection {
-    async fn send_request(&self, body: impl RequestBody) -> Result<Bytes, Error> {
+    async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error> {
         self.send_request(body, None).await
     }
 

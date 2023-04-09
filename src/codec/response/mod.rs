@@ -1,37 +1,33 @@
 use std::io::Read;
 
-use anyhow::anyhow;
-use bytes::Bytes;
+use anyhow::{bail, Context};
 use tracing::{debug, error};
 
 use super::consts::response_codes::{ERROR_RANGE_END, ERROR_RANGE_START, OK};
-use crate::{
-    codec::consts::keys,
-    errors::{ErrorResponse, TransportError},
-};
+use crate::{codec::consts::keys, errors::ErrorResponse};
 
 // TODO: add out-of-band (I.e. IPROTO_CHUNK)
 // TODO: actually implement extra error data
 // TODO: create bodies for specific responses (for optimization reasons)
 #[derive(Clone, Debug)]
-pub enum ResponseBody {
-    // It's up to caller to decode body of the successfull response
-    Ok(Bytes),
+pub(crate) enum ResponseBody {
+    Ok(rmpv::Value), // TODO: replace
     Error(ErrorResponse),
 }
 
-// TODO: hide fields and export them via getters
 #[derive(Clone, Debug)]
-pub struct Response {
+pub(crate) struct Response {
     pub sync: u32,
     pub schema_version: u32,
     pub body: ResponseBody,
 }
 
 impl Response {
-    // TODO: get rid of `Error =` bound
     // TODO: split function
-    pub fn decode(mut buf: impl Read) -> Result<Self, TransportError> {
+    // Use [`anyhow::Error`] because any error would mean either entirely broken
+    // implementation of protocol or underlying I/O error, which currently would be
+    // implementation bug as well.
+    pub(super) fn decode(mut buf: impl Read) -> Result<Self, anyhow::Error> {
         let map_len = rmp::decode::read_map_len(&mut buf)?;
         let mut response_code: Option<u32> = None;
         let mut sync: Option<u32> = None;
@@ -49,30 +45,23 @@ impl Response {
                     schema_version = Some(rmp::decode::read_int(&mut buf)?);
                 }
                 rest => {
+                    // TODO: configurable level for this warn?
                     debug!("Unexpected key encountered in response header: {}", rest);
                     let _ = rmpv::decode::read_value(&mut buf)?;
                 }
             }
         }
-        let response_code = response_code.ok_or_else(|| {
-            TransportError::MessagePackDecode(anyhow!("Missing response code in response"))
-        })?;
-        let sync = sync.ok_or_else(|| {
-            TransportError::MessagePackDecode(anyhow!("Missing sync in response"))
-        })?;
-        let schema_version = schema_version.ok_or_else(|| {
-            TransportError::MessagePackDecode(anyhow!("Missing schema version in response"))
-        })?;
+        let Some(response_code) = response_code else {
+            bail!("Missing response code in response")
+        };
+        let Some(sync) = sync else {
+            bail!("Missing sync in response")
+        };
+        let Some(schema_version) = schema_version else {
+            bail!("Missing schema version in response")
+        };
         let body = match response_code {
-            OK => {
-                // TODO: Allocate some memory in advance
-                let mut buffer = Vec::new();
-                // TODO: improve errors
-                buf.read_to_end(&mut buffer).map_err(|err| {
-                    TransportError::MessagePackDecode(anyhow!("Failed to read buffer"))
-                })?;
-                ResponseBody::Ok(buffer.into())
-            }
+            OK => ResponseBody::Ok(rmpv::decode::read_value(&mut buf)?),
             code @ ERROR_RANGE_START..=ERROR_RANGE_END => {
                 let code = code - 0x8000;
                 let mut description = None;
@@ -85,19 +74,14 @@ impl Response {
                             // TODO: rewrite string decoding
                             let str_len = rmp::decode::read_str_len(&mut buf)?;
                             let mut str_buf = vec![0; str_len as usize];
-                            let _ = buf.read_exact(&mut str_buf).map_err(|e| {
-                                TransportError::MessagePackDecode(anyhow!(
-                                    "Failed to decode error description: {}",
-                                    e
-                                ))
-                            })?;
+                            let _ = buf
+                                .read_exact(&mut str_buf)
+                                .context("Failed to decode error description")?;
                             // TODO: find a way to to this safe
-                            description = Some(String::from_utf8(str_buf).map_err(|e| {
-                                TransportError::MessagePackDecode(anyhow!(
-                                    "Message description is not valid UTF-8 string: {}",
-                                    e
-                                ))
-                            })?);
+                            description = Some(
+                                String::from_utf8(str_buf)
+                                    .context("Error description is not valid UTF-8 string")?,
+                            );
                         }
                         keys::ERROR => {
                             extra = Some(rmpv::decode::read_value(&mut buf)?);
@@ -108,24 +92,16 @@ impl Response {
                         }
                     }
                 }
-                let description = description.ok_or_else(|| {
-                    TransportError::MessagePackDecode(anyhow!(
-                        "Missing error description in response body"
-                    ))
-                })?;
+                let Some(description) = description else {
+                    bail!( "Missing error description in response body")
+                };
                 ResponseBody::Error(ErrorResponse {
                     code,
                     description,
                     extra,
                 })
             }
-            // TODO: maybe separate error for this?
-            rest => {
-                return Err(TransportError::MessagePackDecode(anyhow!(
-                    "Unknown response code: {}",
-                    rest
-                )))
-            }
+            rest => bail!("Unknown response code: {}", rest),
         };
         Ok(Self {
             sync,

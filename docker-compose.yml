@@ -5,5 +5,7 @@ services:
       - tarantool-storage:/opt/tarantool
     ports:
       - "3301:3301"
+    environment:
+      TT_MEMTX_USE_MVCC_ENGINE: true
 volumes:
   tarantool-storage:

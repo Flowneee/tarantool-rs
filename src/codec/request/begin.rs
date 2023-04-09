@@ -1,13 +1,8 @@
 // TODO: unify with rollback/commit.rs
 
-use std::{borrow::Cow, io::Write};
+use std::io::Write;
 
-use rmpv::Value;
-
-use crate::{
-    codec::consts::{keys, RequestType, TransactionIsolationLevel},
-    TransportError,
-};
+use crate::codec::consts::{keys, RequestType, TransactionIsolationLevel};
 
 use super::RequestBody;
 
@@ -26,7 +21,7 @@ impl RequestBody for Begin {
     }
 
     // NOTE: `&mut buf: mut` is required since I don't get why compiler complain
-    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), TransportError> {
+    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), anyhow::Error> {
         let map_len = if self.timeout_secs.is_some() { 2 } else { 1 };
         rmp::encode::write_map_len(&mut buf, map_len)?;
         if let Some(x) = self.timeout_secs {

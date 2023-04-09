@@ -3,9 +3,8 @@ use rmp::{decode::ValueReadError, Marker};
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::{debug, trace};
 
-use crate::errors::TransportError;
-
 use self::{request::Request, response::Response};
+use crate::TransportError;
 
 pub mod consts;
 pub mod request;
@@ -27,7 +26,7 @@ impl Default for LengthDecoder {
 impl LengthDecoder {
     // TODO: this function uses hidden internal functions from rmp (read_data_*)
     // need to rewrite this
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<usize>, TransportError> {
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<usize>, ValueReadError> {
         if src.is_empty() {
             return Ok(None);
         }
@@ -85,7 +84,7 @@ impl LengthDecoder {
 }
 
 #[derive(Default)]
-pub struct ClientCodec {
+pub(crate) struct ClientCodec {
     length_decoder: LengthDecoder,
 }
 
@@ -103,7 +102,9 @@ impl Decoder for ClientCodec {
         if src.len() >= next_frame_length {
             self.length_decoder.reset();
             let frame_bytes = src.split_to(next_frame_length);
-            Response::decode(frame_bytes.reader()).map(Some)
+            Response::decode(frame_bytes.reader())
+                .map(Some)
+                .map_err(TransportError::MessagePackDecode)
         } else {
             Ok(None)
         }
@@ -122,7 +123,8 @@ impl Encoder<Request> for ClientCodec {
         // Write message with fictional length (0)
         let mut writer = dst.writer();
         rmp::encode::write_u64(&mut writer, 0)?;
-        item.encode(&mut writer)?;
+        item.encode(&mut writer)
+            .map_err(TransportError::MessagePackEncode)?;
 
         // Calculate length and override length field with actual value
         let dst = writer.into_inner();
@@ -149,12 +151,7 @@ impl Greeting {
 
     // TODO: err
     /// Decode greeting from provided buffer without checking boundaries.
-    ///
-    /// # Panic
-    ///
-    /// Panics if provided buffer have less than [`IProtoGreeting::SIZE`] bytes remaining.
-    pub fn decode_unchecked(buffer: impl AsRef<[u8]>) -> Self {
-        let buffer = buffer.as_ref();
+    pub fn decode(buffer: [u8; Self::SIZE]) -> Self {
         let line1 = &buffer[0..62];
         let line2 = &buffer[64..126];
         // Remove or call event_enabled if this allocate?

@@ -6,7 +6,6 @@ pub use self::{
 use std::io::Write;
 
 use super::consts::{keys, RequestType};
-use crate::errors::TransportError;
 
 mod auth;
 mod begin;
@@ -26,7 +25,13 @@ pub trait RequestBody: 'static + Send {
         Self: Sized;
 
     /// Encode body into MessagePack and write it to provided [`Write`].
-    fn encode(&self, buf: &mut dyn Write) -> Result<(), TransportError>;
+    ///
+    /// Currently all implementation in this crate uses [`rmp::encode`],
+    /// which throw errors only if used `Write` throw an error. And since internally
+    /// crate use [`bytes::BufMut::writer`], this methods shouldn't throw error in
+    /// normal case, so we don't care about actual type. If necessary, it is possible
+    /// to downcast error to specific type.
+    fn encode(&self, buf: &mut dyn Write) -> Result<(), anyhow::Error>;
 }
 
 // TODO: hide fields and export them via getters
@@ -50,7 +55,7 @@ impl Request {
         }
     }
 
-    pub fn encode(&self, mut buf: impl Write) -> Result<(), TransportError> {
+    pub fn encode(&self, mut buf: impl Write) -> Result<(), anyhow::Error> {
         let map_len = 2
             + if self.schema_version.is_some() { 1 } else { 0 }
             + if self.stream_id.is_some() { 1 } else { 0 };
@@ -67,7 +72,6 @@ impl Request {
             rmp::encode::write_pfix(&mut buf, keys::STREAM_ID)?;
             rmp::encode::write_u32(&mut buf, x)?;
         }
-        self.body.encode(&mut buf)?;
-        Ok(())
+        self.body.encode(&mut buf)
     }
 }

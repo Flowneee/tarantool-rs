@@ -17,8 +17,7 @@ impl RequestBody for Commit {
         RequestType::Commit
     }
 
-    // NOTE: `&mut buf: mut` is required since I don't get why compiler complain
-    fn encode(&self, _buf: &mut dyn Write) -> Result<(), TransportError> {
+    fn encode(&self, _buf: &mut dyn Write) -> Result<(), anyhow::Error> {
         Ok(())
     }
 }

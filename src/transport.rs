@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use futures::{SinkExt, TryFutureExt, TryStreamExt};
 use tokio::{
@@ -11,10 +11,11 @@ use tracing::{debug, trace, warn};
 
 use crate::{
     codec::{request::Request, response::Response, ClientCodec, Greeting},
-    errors::{Error, TransportError},
+    errors::TransportError,
 };
 
-type TransportResponse = Result<Response, Error>;
+// Arc here is necessary to send same error to all waiting in-flights
+type TransportResponse = Result<Response, Arc<TransportError>>;
 type TransportRequest = (Request, oneshot::Sender<TransportResponse>);
 
 pub(crate) struct TransportSender {
@@ -45,16 +46,14 @@ pub(crate) struct Transport {
 }
 
 impl Transport {
-    // TODO: builder
-    // TODO: maybe hide?
     pub(crate) async fn new<A: ToSocketAddrs>(
         addr: A,
     ) -> Result<(Self, TransportSender, Vec<u8>), TransportError> {
         let mut tcp = TcpStream::connect(addr).await?;
 
-        let mut greeting_buffer = [0u8; 128];
+        let mut greeting_buffer = [0u8; Greeting::SIZE];
         tcp.read_exact(&mut greeting_buffer).await?;
-        let greeting = Greeting::decode_unchecked(&greeting_buffer);
+        let greeting = Greeting::decode(greeting_buffer);
         trace!("Salt: {:?}", greeting.salt);
 
         // TODO: test whether increased size can help with performance
@@ -71,7 +70,7 @@ impl Transport {
         ))
     }
 
-    // TODO: allow to alter logging levels
+    // TODO: configurable logging levels
     fn pass_response(&mut self, response: Response) {
         let sync = response.sync;
         if let Some(tx) = self.in_flights.remove(&sync) {
@@ -93,15 +92,28 @@ impl Transport {
             request.sync,
             request.stream_id
         );
-        if self.in_flights.insert(request.sync, tx).is_some() {
-            return Err(TransportError::DuplicatedSync(request.sync));
+        if let Some(old) = self.in_flights.insert(request.sync, tx) {
+            let new = self
+                .in_flights
+                .insert(request.sync, old)
+                .expect("Shouldn't panic, value was just inserted");
+            if new
+                .send(Err(Arc::new(TransportError::DuplicatedSync(request.sync))))
+                .is_err()
+            {
+                warn!(
+                    "Failed to pass error to sync {}, receiver dropped",
+                    request.sync
+                );
+            }
+            return Ok(());
         }
         self.stream.send(request).await
     }
 
-    /// Send error to all in flight requests and drop current channel.
+    /// Send error to all in flight requests and drop current transport.
     fn finish_with_error(self, err: TransportError) {
-        let err = Error::from(err);
+        let err = Arc::new(err);
         for (_, tx) in self.in_flights.into_iter() {
             let _ = tx.send(Err(err.clone()));
         }

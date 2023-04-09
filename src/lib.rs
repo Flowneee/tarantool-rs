@@ -11,7 +11,7 @@ pub use self::{
     builder::ConnectionBuilder,
     connection::Connection,
     connection_like::ConnectionLike,
-    errors::TransportError,
+    errors::{Error, TransportError},
     stream::Stream,
     transaction::{Transaction, TransactionBuilder},
 };

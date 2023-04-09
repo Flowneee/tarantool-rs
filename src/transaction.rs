@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use bytes::Bytes;
 use rmpv::Value;
 use tracing::debug;
 
@@ -19,7 +18,7 @@ use crate::{
 /// If tranasction have a timeout and no requests made for that time, tranasction is automatically
 /// rolled back.
 ///
-/// On drop tranasaction is rolled back.
+/// On drop tranasaction is rolled back, if not have been commited or rolled back already.
 pub struct Transaction {
     connection: Connection,
     stream_id: u32,
@@ -91,12 +90,13 @@ impl Drop for Transaction {
 
 #[async_trait]
 impl ConnectionLike for Transaction {
-    async fn send_request(&self, body: impl RequestBody) -> Result<Bytes, Error> {
+    async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error> {
         self.connection
             .send_request(body, Some(self.stream_id))
             .await
     }
 
+    // TODO: do we need to repeat this in all ConnetionLike implementations?
     fn stream(&self) -> Stream {
         self.connection.stream()
     }
