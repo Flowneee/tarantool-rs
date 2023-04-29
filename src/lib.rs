@@ -9,6 +9,7 @@ pub use rmpv::Value;
 
 pub use self::{
     builder::ConnectionBuilder,
+    codec::consts::{IteratorType, TransactionIsolationLevel},
     connection::Connection,
     connection_like::ConnectionLike,
     errors::{Error, TransportError},

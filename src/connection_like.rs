@@ -6,11 +6,11 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     codec::{
-        request::{Call, Eval, Ping, RequestBody},
+        request::{Call, Delete, Eval, Insert, Ping, Replace, RequestBody, Select, Update, Upsert},
         utils::deserialize_non_sql_response,
     },
     errors::Error,
-    Stream, Transaction, TransactionBuilder,
+    IteratorType, Stream, Transaction, TransactionBuilder,
 };
 
 #[async_trait]
@@ -42,6 +42,7 @@ pub trait ConnectionLike: private::Sealed {
         self.send_request(Ping {}).await.map(drop)
     }
 
+    // TODO: docs
     async fn eval<I, T>(&self, expr: I, args: Vec<Value>) -> Result<T, Error>
     where
         I: Into<Cow<'static, str>> + Send,
@@ -51,6 +52,7 @@ pub trait ConnectionLike: private::Sealed {
         deserialize_non_sql_response(body)
     }
 
+    // TODO: docs
     async fn call<I, T>(&self, function_name: I, args: Vec<Value>) -> Result<T, Error>
     where
         I: Into<Cow<'static, str>> + Send,
@@ -58,6 +60,82 @@ pub trait ConnectionLike: private::Sealed {
     {
         let body = self.send_request(Call::new(function_name, args)).await?;
         deserialize_non_sql_response(body)
+    }
+
+    // TODO: docs
+    async fn select<T>(
+        &self,
+        space_id: u32,
+        index_id: u32,
+        limit: Option<u32>,
+        offset: Option<u32>,
+        iterator: Option<IteratorType>,
+        keys: Vec<Value>,
+    ) -> Result<Vec<T>, Error>
+    where
+        T: DeserializeOwned,
+    {
+        let body = self
+            .send_request(Select::new(
+                space_id, index_id, limit, offset, iterator, keys,
+            ))
+            .await?;
+        deserialize_non_sql_response(body)
+    }
+
+    // TODO: docs
+    // TODO: decode response
+    async fn insert(&self, space_id: u32, tuple: Vec<Value>) -> Result<(), Error> {
+        let _ = self.send_request(Insert::new(space_id, tuple)).await?;
+        Ok(())
+    }
+
+    // TODO: structured tuple
+    // TODO: decode response
+    async fn update(
+        &self,
+        space_id: u32,
+        index_id: u32,
+        index_base: Option<u32>,
+        keys: Vec<Value>,
+        tuple: Vec<Value>,
+    ) -> Result<(), Error> {
+        let _ = self
+            .send_request(Update::new(space_id, index_id, index_base, keys, tuple))
+            .await?;
+        Ok(())
+    }
+
+    // TODO: structured tuple
+    // TODO: decode response
+    // TODO: maybe set index base to 1 always?
+    async fn upsert(
+        &self,
+        space_id: u32,
+        index_base: u32,
+        ops: Vec<Value>,
+        tuple: Vec<Value>,
+    ) -> Result<(), Error> {
+        let _ = self
+            .send_request(Upsert::new(space_id, index_base, ops, tuple))
+            .await?;
+        Ok(())
+    }
+
+    // TODO: structured tuple
+    // TODO: decode response
+    async fn replace(&self, space_id: u32, keys: Vec<Value>) -> Result<(), Error> {
+        let _ = self.send_request(Replace::new(space_id, keys)).await?;
+        Ok(())
+    }
+
+    // TODO: structured tuple
+    // TODO: decode response
+    async fn delete(&self, space_id: u32, index_id: u32, keys: Vec<Value>) -> Result<(), Error> {
+        let _ = self
+            .send_request(Delete::new(space_id, index_id, keys))
+            .await?;
+        Ok(())
     }
 }
 

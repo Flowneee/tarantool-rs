@@ -9,10 +9,18 @@ pub mod keys {
     pub const SYNC: u8 = 0x01;
     pub const SCHEMA_VERSION: u8 = 0x05;
     pub const STREAM_ID: u8 = 0x0a;
+    pub const SPACE_ID: u8 = 0x10;
+    pub const INDEX_ID: u8 = 0x11;
+    pub const LIMIT: u8 = 0x12;
+    pub const OFFSET: u8 = 0x13;
+    pub const ITERATOR: u8 = 0x14;
+    pub const INDEX_BASE: u8 = 0x15;
+    pub const KEY: u8 = 0x20;
     pub const TUPLE: u8 = 0x21;
     pub const FUNCTION_NAME: u8 = 0x22;
     pub const USER_NAME: u8 = 0x23;
     pub const EXPR: u8 = 0x27;
+    pub const OPS: u8 = 0x28;
     pub const DATA: u8 = 0x30;
     pub const ERROR_24: u8 = 0x31;
     pub const ERROR: u8 = 0x52;
@@ -84,5 +92,28 @@ pub enum TransactionIsolationLevel {
 impl Default for TransactionIsolationLevel {
     fn default() -> Self {
         Self::Default
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+#[repr(u8)]
+pub enum IteratorType {
+    Eq = 0,
+    Req = 1,
+    All = 2,
+    Lt = 3,
+    Le = 4,
+    Ge = 5,
+    Gt = 6,
+    BitsAllSet = 7,
+    BitsAnySet = 8,
+    BitsAlLNotSet = 9,
+    Overlaps = 10,
+    Neighvor = 11,
+}
+
+impl Default for IteratorType {
+    fn default() -> Self {
+        Self::Eq
     }
 }

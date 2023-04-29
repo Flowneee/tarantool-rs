@@ -21,6 +21,17 @@ async fn main() -> Result<(), anyhow::Error> {
     let _: Value = tx.eval("box.space.clients:insert{4}", vec![]).await?;
     tx.commit().await?;
 
+    let _: Vec<u32> = connection
+        .select(
+            512,
+            0,
+            None,
+            None,
+            Some(tarantool_rs::IteratorType::All),
+            vec![1.into()],
+        )
+        .await?;
+
     // let eval_fut = connection
     //     .eval::<_, (u32, String)>(
     //         "fiber = require('fiber'); fiber.sleep(0.5); return ...;",

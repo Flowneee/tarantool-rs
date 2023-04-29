@@ -1,4 +1,4 @@
-use std::io::Cursor;
+use std::io::Write;
 
 use anyhow::anyhow;
 use rmpv::Value;
@@ -32,4 +32,30 @@ pub fn deserialize_non_sql_response<T: DeserializeOwned>(value: Value) -> Result
     Err(Error::ResponseBodyDecode(anyhow!(
         "No IPROTO_DATA key in MessagePack response body"
     )))
+}
+
+pub fn write_kv_str(mut buf: &mut dyn Write, key: u8, value: &str) -> Result<(), anyhow::Error> {
+    rmp::encode::write_pfix(&mut buf, key)?;
+    rmp::encode::write_str(&mut buf, value)?;
+    Ok(())
+}
+
+pub fn write_kv_u32(mut buf: &mut dyn Write, key: u8, value: u32) -> Result<(), anyhow::Error> {
+    rmp::encode::write_pfix(&mut buf, key)?;
+    rmp::encode::write_u32(&mut buf, value)?;
+    Ok(())
+}
+
+pub fn write_kv_array(
+    mut buf: &mut dyn Write,
+    key: u8,
+    value: &[Value],
+) -> Result<(), anyhow::Error> {
+    rmp::encode::write_pfix(&mut buf, key)?;
+    // TODO: safe conversion from usize to u32
+    rmp::encode::write_array_len(&mut buf, value.len() as u32)?;
+    for x in value.iter() {
+        rmpv::encode::write_value(&mut buf, x)?;
+    }
+    Ok(())
 }

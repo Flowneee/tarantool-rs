@@ -130,7 +130,7 @@ impl Transport {
                         Ok(None) => break TransportError::ConnectionClosed,
                         Err(e) => break e
                     };
-                    trace!("Received response for sync {}", resp.sync);
+                    trace!("Received response for sync {}, schema version {}", resp.sync, resp.schema_version);
                     self.pass_response(resp);
                 }
                 next = self.rx.recv() => {
