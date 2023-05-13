@@ -1,30 +1,32 @@
 // TODO:
-//  - [ ] check or remove all unsafes, unwrap, panic, expect
-//  - [ ] remove main.rs
-//  - [ ] tests
-//  - [ ] bump version to 0.1.0
-//  - [ ] remove unused dependencies
+//
+// Features:
+//
+// * [ ] Wrappers around schema types, allowing to call methods directly on space or index
+// * [ ] connections pooling
+// * [ ] chunked responses (tt feature)
+// * [ ] streaming responses for select
+// * [ ] background schema fetching, reloading and invalidating
+// * [ ] triggers on connection events (connect/disconnect/schema reloading)
+//
+// Other
+//
+// * [ ] check or remove all unsafes, unwrap, panic, expect
+// * [ ] tests
+// * [ ] bump version to 0.1.0
+// * [ ] remove unused dependencies
 
 pub use rmpv::Value;
 
 pub use self::{
-    builder::ConnectionBuilder,
+    client::*,
     codec::consts::{IteratorType, TransactionIsolationLevel},
-    connection::Connection,
-    connection_like::ConnectionLike,
     errors::{Error, TransportError},
-    stream::Stream,
-    transaction::{Transaction, TransactionBuilder},
 };
-pub mod schema;
+
 pub mod utils;
 
-mod builder;
-mod transport;
-// TODO: export codec for those who want to write custom connectors
+mod client;
 mod codec;
-mod connection;
-mod connection_like;
 mod errors;
-mod stream;
-mod transaction;
+mod transport;

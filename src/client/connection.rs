@@ -7,19 +7,21 @@ use std::{
 };
 
 use async_trait::async_trait;
+use futures::Future;
 use rmpv::Value;
 use tracing::debug;
 
+use super::{
+    connection_like::ConnectionLike, ConnectionBuilder, Stream, Transaction, TransactionBuilder,
+};
 use crate::{
     codec::{
         consts::TransactionIsolationLevel,
         request::{Auth, Id, Request, RequestBody},
         response::ResponseBody,
     },
-    connection_like::ConnectionLike,
     errors::Error,
-    transport::TransportSender,
-    ConnectionBuilder, Stream, Transaction, TransactionBuilder,
+    transport::DispatcherSender,
 };
 
 #[derive(Clone)]
@@ -28,7 +30,7 @@ pub struct Connection {
 }
 
 struct ConnectionInner {
-    transport_sender: TransportSender,
+    dispatcher_sender: DispatcherSender,
     next_sync: AtomicU32,
     next_stream_id: AtomicU32,
     transaction_timeout_secs: Option<f64>,
@@ -43,13 +45,13 @@ impl Connection {
     }
 
     pub(crate) fn new(
-        transport_sender: TransportSender,
+        dispatcher_sender: DispatcherSender,
         transaction_timeout: Option<Duration>,
         transaction_isolation_level: TransactionIsolationLevel,
     ) -> Self {
         Self {
             inner: Arc::new(ConnectionInner {
-                transport_sender,
+                dispatcher_sender,
                 next_sync: AtomicU32::new(0),
                 // TODO: check if 0 is valid value
                 next_stream_id: AtomicU32::new(1),
@@ -62,20 +64,21 @@ impl Connection {
         }
     }
 
-    pub(crate) async fn send_request(
-        &self,
-        body: impl RequestBody,
-        stream_id: Option<u32>,
-    ) -> Result<Value, Error> {
-        let resp = self
-            .inner
-            .transport_sender
-            .send(Request::new(self.next_sync(), body, stream_id)?)
-            .await?;
+    pub(crate) async fn send_encoded_request(&self, request: Request) -> Result<Value, Error> {
+        let resp = self.inner.dispatcher_sender.send(request).await?;
         match resp.body {
             ResponseBody::Ok(x) => Ok(x),
             ResponseBody::Error(x) => Err(x.into()),
         }
+    }
+
+    pub(crate) fn send_request(
+        &self,
+        body: impl RequestBody,
+        stream_id: Option<u32>,
+    ) -> impl Future<Output = Result<Value, Error>> + Send + '_ {
+        let req = Request::new(body, stream_id);
+        async { self.send_encoded_request(req?).await }
     }
 
     /// Synchronously send request to channel and drop response.
@@ -85,9 +88,11 @@ impl Connection {
         stream_id: Option<u32>,
     ) {
         let this = self.clone();
+        let req = Request::new(body, stream_id);
         let _ = self.inner.async_rt_handle.spawn(async move {
-            let res = this.clone().send_request(body, stream_id).await;
-            debug!("Response for forgot sync request: {:?}", res);
+            // TOOD: fix unwrap
+            let res = this.clone().send_encoded_request(req.unwrap()).await;
+            debug!("Response for background request: {:?}", res);
         });
     }
 
@@ -104,18 +109,6 @@ impl Connection {
         } else {
             self.inner.next_stream_id.fetch_add(1, Ordering::SeqCst)
         }
-    }
-
-    /// Send AUTH request ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#iproto-auth-0x07)).
-    pub(crate) async fn auth(
-        &self,
-        user: String,
-        password: Option<String>,
-        salt: Vec<u8>,
-    ) -> Result<(), Error> {
-        self.send_request(Auth::new(user, password, salt), None)
-            .await
-            .map(drop)
     }
 
     // TODO: return response from server
@@ -143,7 +136,7 @@ impl Connection {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl ConnectionLike for Connection {
     async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error> {
         self.send_request(body, None).await

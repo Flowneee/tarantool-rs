@@ -141,7 +141,7 @@ impl Encoder<Request> for ClientCodec {
 /// [Docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#greeting-message).
 #[derive(Debug)]
 pub struct Greeting {
-    // TODO: add optional server field
+    pub server: String,
     pub salt: Vec<u8>,
 }
 
@@ -154,8 +154,6 @@ impl Greeting {
     pub fn decode(buffer: [u8; Self::SIZE]) -> Self {
         let line1 = &buffer[0..62];
         let line2 = &buffer[64..126];
-        // Remove or call event_enabled if this allocate?
-        debug!("Server greeting: {}", String::from_utf8_lossy(&line1));
         let salt_b64 = line2
             .iter()
             .enumerate()
@@ -164,6 +162,9 @@ impl Greeting {
             .map_or(&b""[..], |(idx, _)| &line2[0..idx]);
         // TODO error on empty salt
         let salt = base64::decode(salt_b64).expect("Valid base64");
-        Self { salt }
+        Self {
+            server: String::from_utf8_lossy(&line1).into_owned(),
+            salt,
+        }
     }
 }

@@ -4,17 +4,18 @@ use async_trait::async_trait;
 use rmpv::Value;
 use serde::de::DeserializeOwned;
 
+use super::{Stream, Transaction, TransactionBuilder};
 use crate::{
     codec::{
         request::{Call, Delete, Eval, Insert, Ping, Replace, RequestBody, Select, Update, Upsert},
         utils::deserialize_non_sql_response,
     },
     errors::Error,
-    IteratorType, Stream, Transaction, TransactionBuilder,
+    IteratorType,
 };
 
-#[async_trait]
-pub trait ConnectionLike: private::Sealed + Sync {
+#[async_trait(?Send)]
+pub trait ConnectionLike: private::Sealed {
     /// Send request, receiving raw response body.
     ///
     /// It is not recommended to use this method directly, since some requests
@@ -139,7 +140,7 @@ pub trait ConnectionLike: private::Sealed + Sync {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<C: ConnectionLike + private::Sealed + Sync> ConnectionLike for &C {
     async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error> {
         (*self).send_request(body).await
@@ -159,7 +160,7 @@ impl<C: ConnectionLike + private::Sealed + Sync> ConnectionLike for &C {
 }
 
 mod private {
-    use crate::{Connection, Stream, Transaction};
+    use crate::client::{Connection, Stream, Transaction};
 
     #[doc(hidden)]
     pub trait Sealed {}

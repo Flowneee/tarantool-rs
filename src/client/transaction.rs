@@ -4,13 +4,13 @@ use async_trait::async_trait;
 use rmpv::Value;
 use tracing::debug;
 
+use super::{Connection, ConnectionLike, Stream};
 use crate::{
     codec::{
         consts::TransactionIsolationLevel,
         request::{Begin, Commit, RequestBody, Rollback},
     },
     errors::Error,
-    Connection, ConnectionLike, Stream,
 };
 
 /// Started transaction ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#binary-protocol-streams)).
@@ -88,7 +88,7 @@ impl Drop for Transaction {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl ConnectionLike for Transaction {
     async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error> {
         self.conn.send_request(body, Some(self.stream_id)).await

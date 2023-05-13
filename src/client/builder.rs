@@ -1,13 +1,13 @@
-use std::time::Duration;
+use std::{fmt::Display, time::Duration};
 
 use tokio::net::ToSocketAddrs;
 use tracing::debug;
 
+use super::connection::Connection;
 use crate::{
     codec::{consts::TransactionIsolationLevel, request::Id},
-    connection::Connection,
     errors::Error,
-    transport::Transport,
+    transport::Dispatcher,
 };
 
 /// Build connection to Tarantool.
@@ -21,12 +21,17 @@ pub struct ConnectionBuilder {
 
 impl ConnectionBuilder {
     /// Create connection to Tarantool using provided address and test it using PING.
-    pub async fn build<A: ToSocketAddrs>(&self, addr: A) -> Result<Connection, Error> {
-        let (transport, trapnsport_sender, salt) = Transport::new(addr).await?;
+    pub async fn build<A>(&self, addr: A) -> Result<Connection, Error>
+    where
+        A: ToSocketAddrs + Display,
+    {
+        let (dispatcher, disaptcher_sender) =
+            Dispatcher::new(addr, self.user.as_deref(), self.password.as_deref()).await?;
+
         // TODO: support setting custom executor
-        tokio::spawn(transport.run());
+        tokio::spawn(dispatcher.run());
         let conn = Connection::new(
-            trapnsport_sender,
+            disaptcher_sender,
             self.transaction_timeout,
             self.transaction_isolation_level,
         );
@@ -42,10 +47,6 @@ impl ConnectionBuilder {
             features.watchers
         );
         conn.id(features).await?;
-
-        if let Some(user) = self.user.clone() {
-            conn.auth(user, self.password.clone(), salt).await?;
-        }
 
         Ok(conn)
     }

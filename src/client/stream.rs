@@ -1,10 +1,8 @@
 use async_trait::async_trait;
 use rmpv::Value;
 
-use crate::{
-    codec::request::RequestBody, errors::Error, Connection, ConnectionLike, Transaction,
-    TransactionBuilder,
-};
+use super::{Connection, ConnectionLike, Transaction, TransactionBuilder};
+use crate::{codec::request::RequestBody, errors::Error};
 
 /// Abstraction, providing sequential processing of requests.
 ///
@@ -54,7 +52,7 @@ impl Stream {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl ConnectionLike for Stream {
     async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error> {
         self.conn.send_request(body, Some(self.stream_id)).await

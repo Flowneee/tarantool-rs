@@ -11,13 +11,13 @@ use crate::codec::{
 };
 
 #[derive(Clone, Debug)]
-pub(crate) struct Auth {
-    pub user_name: String,
+pub(crate) struct Auth<'a> {
+    pub user_name: &'a str,
     pub scramble: Vec<u8>,
 }
 
-impl Auth {
-    pub(crate) fn new(user: String, password: Option<String>, salt: Vec<u8>) -> Self {
+impl<'a> Auth<'a> {
+    pub(crate) fn new(user: &'a str, password: Option<&'a str>, salt: &'a [u8]) -> Self {
         Self {
             user_name: user,
             scramble: prepare_scramble(password, salt),
@@ -25,7 +25,7 @@ impl Auth {
     }
 }
 
-impl RequestBody for Auth {
+impl<'a> RequestBody for Auth<'a> {
     fn request_type() -> RequestType
     where
         Self: Sized,
@@ -55,8 +55,8 @@ macro_rules! sha1 {
     }
 }
 
-fn prepare_scramble(password: Option<String>, salt: Vec<u8>) -> Vec<u8> {
-    let password = password.as_deref().unwrap_or("");
+fn prepare_scramble(password: Option<&str>, salt: &[u8]) -> Vec<u8> {
+    let password = password.unwrap_or("");
     let mut step_1 = sha1!(password.as_bytes());
     let step_2 = sha1!(&step_1);
     let step_3 = sha1!(&salt[0..min(salt.len(), 20)], &step_2);

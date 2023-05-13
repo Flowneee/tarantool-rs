@@ -33,7 +33,7 @@ pub const PROTOCOL_VERSION: u8 = 3;
 const DEFAULT_ENCODE_BUFFER_SIZE: usize = 128;
 
 // TODO: docs
-pub trait RequestBody: 'static + Send {
+pub trait RequestBody {
     /// Return type of this request.
     fn request_type() -> RequestType
     where
@@ -50,6 +50,8 @@ pub trait RequestBody: 'static + Send {
 }
 
 pub(crate) struct Request {
+    /// By default `sync` is set to 0 and replaced with
+    /// actual value when reaching [`crate::transport::Connection`].
     pub request_type: RequestType,
     pub sync: u32,
     pub schema_version: Option<u32>,
@@ -58,16 +60,12 @@ pub(crate) struct Request {
 }
 
 impl Request {
-    pub fn new<Body: RequestBody>(
-        sync: u32,
-        body: Body,
-        stream_id: Option<u32>,
-    ) -> Result<Self, Error> {
+    pub fn new<Body: RequestBody>(body: Body, stream_id: Option<u32>) -> Result<Self, Error> {
         let mut buf = BytesMut::with_capacity(DEFAULT_ENCODE_BUFFER_SIZE).writer();
         body.encode(&mut buf).map_err(Error::RequestBodyEncode)?;
         Ok(Self {
             request_type: Body::request_type(),
-            sync,
+            sync: 0,
             schema_version: None,
             stream_id,
             encoded_body: buf.into_inner().freeze(),
@@ -93,5 +91,9 @@ impl Request {
         }
         buf.write_all(&self.encoded_body)
             .context("Failed to write encoded body to buffer")
+    }
+
+    pub(crate) fn sync_mut(&mut self) -> &mut u32 {
+        &mut self.sync
     }
 }

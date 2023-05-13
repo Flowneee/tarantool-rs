@@ -4,7 +4,7 @@ use rmpv::Value;
 use serde::Deserialize;
 
 use super::SystemSpacesId;
-use crate::{utils::UniqueIdName, ConnectionLike, Error};
+use crate::{client::ConnectionLike, utils::UniqueIdName, Error};
 
 /// Index metadata from [system view](https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_space/system_views/).
 #[derive(Clone, Deserialize)]
