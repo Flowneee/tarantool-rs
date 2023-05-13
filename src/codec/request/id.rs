@@ -17,7 +17,7 @@ impl Default for Id {
     fn default() -> Self {
         Self {
             streams: true,
-            transactions: false,
+            transactions: true,
             error_extension: true,
             watchers: false,
             protocol_version: PROTOCOL_VERSION,

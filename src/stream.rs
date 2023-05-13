@@ -42,37 +42,33 @@ use crate::{
 
 #[derive(Clone)]
 pub struct Stream {
-    connection: Connection,
+    conn: Connection,
     stream_id: u32,
 }
 
+// TODO: convert stream to transaction and back
 impl Stream {
     pub(crate) fn new(conn: Connection) -> Self {
         let stream_id = conn.next_stream_id();
-        Self {
-            connection: conn,
-            stream_id,
-        }
+        Self { conn, stream_id }
     }
 }
 
 #[async_trait]
 impl ConnectionLike for Stream {
     async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error> {
-        self.connection
-            .send_request(body, Some(self.stream_id))
-            .await
+        self.conn.send_request(body, Some(self.stream_id)).await
     }
 
     fn stream(&self) -> Stream {
-        self.connection.stream()
+        self.conn.stream()
     }
 
     fn transaction_builder(&self) -> TransactionBuilder {
-        self.connection.transaction_builder()
+        self.conn.transaction_builder()
     }
 
     async fn transaction(&self) -> Result<Transaction, Error> {
-        self.connection.transaction().await
+        self.conn.transaction().await
     }
 }

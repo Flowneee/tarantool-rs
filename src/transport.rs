@@ -43,6 +43,7 @@ pub(crate) struct Transport {
     // TODO: replace HashMap with something different?
     // TODO: cleanup sometimes
     in_flights: HashMap<u32, oneshot::Sender<TransportResponse>>,
+    //schema_version: u32,
 }
 
 impl Transport {

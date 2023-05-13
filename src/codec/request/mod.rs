@@ -1,3 +1,8 @@
+use anyhow::Context;
+use bytes::{BufMut, Bytes, BytesMut};
+
+use crate::Error;
+
 pub(crate) use self::{
     auth::Auth, begin::Begin, call::Call, commit::Commit, delete::Delete, eval::Eval, id::Id,
     insert::Insert, ping::Ping, replace::Replace, rollback::Rollback, select::Select,
@@ -25,6 +30,8 @@ mod upsert;
 
 pub const PROTOCOL_VERSION: u8 = 3;
 
+const DEFAULT_ENCODE_BUFFER_SIZE: usize = 128;
+
 // TODO: docs
 pub trait RequestBody: 'static + Send {
     /// Return type of this request.
@@ -43,23 +50,28 @@ pub trait RequestBody: 'static + Send {
 }
 
 pub(crate) struct Request {
-    // TODO: get type from body field
     pub request_type: RequestType,
     pub sync: u32,
     pub schema_version: Option<u32>,
     pub stream_id: Option<u32>,
-    pub body: Box<dyn RequestBody>,
+    pub encoded_body: Bytes,
 }
 
 impl Request {
-    pub fn new<Body: RequestBody>(sync: u32, body: Body, stream_id: Option<u32>) -> Self {
-        Self {
+    pub fn new<Body: RequestBody>(
+        sync: u32,
+        body: Body,
+        stream_id: Option<u32>,
+    ) -> Result<Self, Error> {
+        let mut buf = BytesMut::with_capacity(DEFAULT_ENCODE_BUFFER_SIZE).writer();
+        body.encode(&mut buf).map_err(Error::RequestBodyEncode)?;
+        Ok(Self {
             request_type: Body::request_type(),
             sync,
             schema_version: None,
             stream_id,
-            body: Box::new(body),
-        }
+            encoded_body: buf.into_inner().freeze(),
+        })
     }
 
     pub fn encode(&self, mut buf: impl Write) -> Result<(), anyhow::Error> {
@@ -79,6 +91,7 @@ impl Request {
             rmp::encode::write_pfix(&mut buf, keys::STREAM_ID)?;
             rmp::encode::write_u32(&mut buf, x)?;
         }
-        self.body.encode(&mut buf)
+        buf.write_all(&self.encoded_body)
+            .context("Failed to write encoded body to buffer")
     }
 }

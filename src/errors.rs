@@ -28,6 +28,8 @@ impl ErrorResponse {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("Error while encoding response body into MessagePack: {0}")]
+    RequestBodyEncode(#[source] anyhow::Error),
     #[error("Error response: {0}")]
     Response(#[from] ErrorResponse),
     #[error("Error while decoding response body: {0}")]
@@ -36,6 +38,11 @@ pub enum Error {
     SerdeDeserialize(#[from] rmpv::ext::Error),
     #[error("Transport error: {0}")]
     Transport(#[from] Arc<TransportError>),
+
+    #[error("Space not found")]
+    SpaceNotFound,
+    #[error("Failed to metadata: {0}")]
+    MetadataLoad(#[source] anyhow::Error),
 }
 
 impl From<TransportError> for Error {

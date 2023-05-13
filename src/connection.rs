@@ -70,7 +70,7 @@ impl Connection {
         let resp = self
             .inner
             .transport_sender
-            .send(Request::new(self.next_sync(), body, stream_id))
+            .send(Request::new(self.next_sync(), body, stream_id)?)
             .await?;
         match resp.body {
             ResponseBody::Ok(x) => Ok(x),
@@ -124,7 +124,7 @@ impl Connection {
         self.send_request(features, None).await.map(drop)
     }
 
-    pub fn stream(&self) -> Stream {
+    pub(crate) fn stream(&self) -> Stream {
         Stream::new(self.clone())
     }
 

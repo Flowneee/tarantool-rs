@@ -14,7 +14,7 @@ use crate::{
 };
 
 #[async_trait]
-pub trait ConnectionLike: private::Sealed {
+pub trait ConnectionLike: private::Sealed + Sync {
     /// Send request, receiving raw response body.
     ///
     /// It is not recommended to use this method directly, since some requests
@@ -139,6 +139,25 @@ pub trait ConnectionLike: private::Sealed {
     }
 }
 
+#[async_trait]
+impl<C: ConnectionLike + private::Sealed + Sync> ConnectionLike for &C {
+    async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error> {
+        (*self).send_request(body).await
+    }
+
+    fn stream(&self) -> Stream {
+        (*self).stream()
+    }
+
+    fn transaction_builder(&self) -> TransactionBuilder {
+        (*self).transaction_builder()
+    }
+
+    async fn transaction(&self) -> Result<Transaction, Error> {
+        (*self).transaction().await
+    }
+}
+
 mod private {
     use crate::{Connection, Stream, Transaction};
 
@@ -148,4 +167,6 @@ mod private {
     impl Sealed for Connection {}
     impl Sealed for Stream {}
     impl Sealed for Transaction {}
+    impl<S: Sealed> Sealed for &S {}
+    impl<S: Sealed> Sealed for &mut S {}
 }

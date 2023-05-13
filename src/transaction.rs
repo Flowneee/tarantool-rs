@@ -20,7 +20,7 @@ use crate::{
 ///
 /// On drop tranasaction is rolled back, if not have been commited or rolled back already.
 pub struct Transaction {
-    connection: Connection,
+    conn: Connection,
     stream_id: u32,
     finished: bool,
 }
@@ -33,7 +33,7 @@ impl Transaction {
     ) -> Result<Self, Error> {
         let stream_id = conn.next_stream_id();
         let this = Self {
-            connection: conn,
+            conn,
             stream_id,
             finished: false,
         };
@@ -81,7 +81,7 @@ impl Drop for Transaction {
                 self.stream_id
             );
             let _ = self
-                .connection
+                .conn
                 .send_request_sync_and_forget(Rollback::default(), Some(self.stream_id));
             self.finished = true;
         }
@@ -91,22 +91,20 @@ impl Drop for Transaction {
 #[async_trait]
 impl ConnectionLike for Transaction {
     async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error> {
-        self.connection
-            .send_request(body, Some(self.stream_id))
-            .await
+        self.conn.send_request(body, Some(self.stream_id)).await
     }
 
     // TODO: do we need to repeat this in all ConnetionLike implementations?
     fn stream(&self) -> Stream {
-        self.connection.stream()
+        self.conn.stream()
     }
 
     fn transaction_builder(&self) -> TransactionBuilder {
-        self.connection.transaction_builder()
+        self.conn.transaction_builder()
     }
 
     async fn transaction(&self) -> Result<Transaction, Error> {
-        self.connection.transaction().await
+        self.conn.transaction().await
     }
 }
 

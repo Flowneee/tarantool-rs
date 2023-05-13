@@ -16,6 +16,8 @@ pub use self::{
     stream::Stream,
     transaction::{Transaction, TransactionBuilder},
 };
+pub mod schema;
+pub mod utils;
 
 mod builder;
 mod transport;
