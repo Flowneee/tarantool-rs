@@ -1,7 +1,7 @@
-use futures::FutureExt;
+
 use tarantool_rs::{
-    schema::{IndexMetadata, SpaceMetadata},
-    Connection, ConnectionLike, IteratorType, Value,
+    schema::{SpaceMetadata},
+    Connection,
 };
 use tracing::info;
 

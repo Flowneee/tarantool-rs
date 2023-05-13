@@ -80,7 +80,7 @@ impl Drop for Transaction {
                 "Rolling back tranasction on stream {} (on drop)",
                 self.stream_id
             );
-            let _ = self
+            self
                 .conn
                 .send_request_sync_and_forget(Rollback::default(), Some(self.stream_id));
             self.finished = true;

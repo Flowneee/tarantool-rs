@@ -1,7 +1,7 @@
 use bytes::{Buf, BufMut, BytesMut};
 use rmp::{decode::ValueReadError, Marker};
 use tokio_util::codec::{Decoder, Encoder};
-use tracing::{debug, trace};
+use tracing::{trace};
 
 use self::{request::Request, response::Response};
 use crate::TransportError;
@@ -71,7 +71,7 @@ impl LengthDecoder {
                     return Ok(None);
                 }
             }
-            rest => return Err(ValueReadError::TypeMismatch(rest).into()),
+            rest => return Err(ValueReadError::TypeMismatch(rest)),
         };
         trace!("decoded frame length: {}", length);
         *self = LengthDecoder::Value(length);
@@ -163,7 +163,7 @@ impl Greeting {
         // TODO error on empty salt
         let salt = base64::decode(salt_b64).expect("Valid base64");
         Self {
-            server: String::from_utf8_lossy(&line1).into_owned(),
+            server: String::from_utf8_lossy(line1).into_owned(),
             salt,
         }
     }

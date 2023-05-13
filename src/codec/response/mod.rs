@@ -74,7 +74,7 @@ impl Response {
                             // TODO: rewrite string decoding
                             let str_len = rmp::decode::read_str_len(&mut buf)?;
                             let mut str_buf = vec![0; str_len as usize];
-                            let _ = buf
+                            buf
                                 .read_exact(&mut str_buf)
                                 .context("Failed to decode error description")?;
                             // TODO: find a way to to this safe

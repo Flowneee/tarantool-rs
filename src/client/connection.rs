@@ -7,7 +7,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::Future;
+use futures::{Future, TryFutureExt};
 use rmpv::Value;
 use tracing::debug;
 
@@ -17,7 +17,7 @@ use super::{
 use crate::{
     codec::{
         consts::TransactionIsolationLevel,
-        request::{Auth, Id, Request, RequestBody},
+        request::{Id, Request, RequestBody},
         response::ResponseBody,
     },
     errors::Error,
@@ -31,7 +31,7 @@ pub struct Connection {
 
 struct ConnectionInner {
     dispatcher_sender: DispatcherSender,
-    next_sync: AtomicU32,
+    // TODO: change how stream id assigned when dispathcer have more than one connection
     next_stream_id: AtomicU32,
     transaction_timeout_secs: Option<f64>,
     transaction_isolation_level: TransactionIsolationLevel,
@@ -52,7 +52,6 @@ impl Connection {
         Self {
             inner: Arc::new(ConnectionInner {
                 dispatcher_sender,
-                next_sync: AtomicU32::new(0),
                 // TODO: check if 0 is valid value
                 next_stream_id: AtomicU32::new(1),
                 transaction_timeout_secs: transaction_timeout.as_ref().map(Duration::as_secs_f64),
@@ -82,6 +81,7 @@ impl Connection {
     }
 
     /// Synchronously send request to channel and drop response.
+    #[allow(clippy::let_underscore_future)]
     pub(crate) fn send_request_sync_and_forget(
         &self,
         body: impl RequestBody,
@@ -90,15 +90,11 @@ impl Connection {
         let this = self.clone();
         let req = Request::new(body, stream_id);
         let _ = self.inner.async_rt_handle.spawn(async move {
-            // TOOD: fix unwrap
-            let res = this.clone().send_encoded_request(req.unwrap()).await;
+            let res = futures::future::ready(req)
+                .and_then(|x| this.send_encoded_request(x))
+                .await;
             debug!("Response for background request: {:?}", res);
         });
-    }
-
-    // TODO: maybe other Ordering??
-    pub(crate) fn next_sync(&self) -> u32 {
-        self.inner.next_sync.fetch_add(1, Ordering::SeqCst)
     }
 
     // TODO: maybe other Ordering??

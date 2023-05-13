@@ -1,6 +1,6 @@
-use futures::FutureExt;
+
 use tarantool_rs::{Connection, ConnectionLike, Value};
-use tracing::info;
+
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {

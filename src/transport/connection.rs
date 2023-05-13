@@ -80,8 +80,8 @@ impl Connection {
 
         let resp = self.get_next_stream_value().await?;
         match resp.body {
-            ResponseBody::Ok(x) => Ok(()),
-            ResponseBody::Error(err) => panic!("Auth error"),
+            ResponseBody::Ok(_x) => Ok(()),
+            ResponseBody::Error(_err) => panic!("Auth error"),
         }
     }
 

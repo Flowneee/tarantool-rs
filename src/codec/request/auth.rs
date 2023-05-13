@@ -36,7 +36,7 @@ impl<'a> RequestBody for Auth<'a> {
     // NOTE: `&mut buf: mut` is required since I don't get why compiler complain
     fn encode(&self, mut buf: &mut dyn Write) -> Result<(), anyhow::Error> {
         rmp::encode::write_map_len(&mut buf, 2)?;
-        write_kv_str(&mut buf, keys::USER_NAME, &self.user_name)?;
+        write_kv_str(&mut buf, keys::USER_NAME, self.user_name)?;
         rmp::encode::write_pfix(&mut buf, keys::TUPLE)?;
         rmp::encode::write_array_len(&mut buf, 2)?;
         rmp::encode::write_str(&mut buf, "chap-sha1")?;
