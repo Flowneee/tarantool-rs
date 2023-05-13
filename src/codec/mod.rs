@@ -1,7 +1,7 @@
 use bytes::{Buf, BufMut, BytesMut};
 use rmp::{decode::ValueReadError, Marker};
 use tokio_util::codec::{Decoder, Encoder};
-use tracing::{trace};
+use tracing::trace;
 
 use self::{request::Request, response::Response};
 use crate::TransportError;

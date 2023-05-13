@@ -1,6 +1,4 @@
-
 use tarantool_rs::{Connection, ConnectionLike, Value};
-
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {

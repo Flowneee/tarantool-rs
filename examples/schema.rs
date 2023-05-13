@@ -1,8 +1,4 @@
-
-use tarantool_rs::{
-    schema::{SpaceMetadata},
-    Connection,
-};
+use tarantool_rs::{schema::SpaceMetadata, Connection};
 use tracing::info;
 
 #[tokio::main]
