@@ -8,6 +8,7 @@
 // * [ ] streaming responses for select
 // * [ ] background schema fetching, reloading and invalidating
 // * [ ] triggers on connection events (connect/disconnect/schema reloading)
+// * [ ] SQL
 //
 // Other
 //

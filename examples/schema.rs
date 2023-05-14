@@ -7,7 +7,6 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let conn = Connection::builder().build("127.0.0.1:3301").await?;
 
-    //let data = get_list_of_user_spaces(&conn).await?;
     let data = SpaceMetadata::load_by_name(conn, "clients").await?;
     info!("{:?}", data);
 
