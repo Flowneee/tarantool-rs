@@ -2,9 +2,12 @@ use std::io::Write;
 
 use rmpv::Value;
 
-use crate::codec::{
-    consts::{keys, RequestType},
-    utils::{write_kv_array, write_kv_u32},
+use crate::{
+    codec::{
+        consts::{keys, RequestType},
+        utils::{write_kv_array, write_kv_u32},
+    },
+    errors::EncodingError,
 };
 
 use super::RequestBody;
@@ -35,7 +38,7 @@ impl RequestBody for Delete {
     }
 
     // NOTE: `&mut buf: mut` is required since I don't get why compiler complain
-    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), anyhow::Error> {
+    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), EncodingError> {
         rmp::encode::write_map_len(&mut buf, 3)?;
         write_kv_u32(buf, keys::SPACE_ID, self.space_id)?;
         write_kv_u32(buf, keys::INDEX_ID, self.index_id)?;

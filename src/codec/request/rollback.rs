@@ -2,7 +2,7 @@
 
 use std::io::Write;
 
-use crate::codec::consts::RequestType;
+use crate::{codec::consts::RequestType, errors::EncodingError};
 
 use super::RequestBody;
 
@@ -17,7 +17,7 @@ impl RequestBody for Rollback {
         RequestType::Rollback
     }
 
-    fn encode(&self, _buf: &mut dyn Write) -> Result<(), anyhow::Error> {
+    fn encode(&self, _buf: &mut dyn Write) -> Result<(), EncodingError> {
         Ok(())
     }
 }

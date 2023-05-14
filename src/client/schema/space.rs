@@ -39,13 +39,16 @@ impl fmt::Debug for SpaceMetadata {
 
 impl SpaceMetadata {
     /// Load metadata of single space by its id.
-    pub async fn load_by_id(conn: impl ConnectionLike, id: u32) -> Result<Self, Error> {
+    pub async fn load_by_id(conn: impl ConnectionLike, id: u32) -> Result<Option<Self>, Error> {
         // 0 - primary id index
         Self::load(conn, 0, id).await
     }
 
     /// Load metadata of single space by its name.
-    pub async fn load_by_name(conn: impl ConnectionLike, name: &str) -> Result<Self, Error> {
+    pub async fn load_by_name(
+        conn: impl ConnectionLike,
+        name: &str,
+    ) -> Result<Option<Self>, Error> {
         // 2 - index on 'name' field
         Self::load(conn, 2, name).await
     }
@@ -55,8 +58,8 @@ impl SpaceMetadata {
         conn: impl ConnectionLike,
         index_id: u32,
         key: impl Into<Value>,
-    ) -> Result<Self, Error> {
-        let mut this: Self = conn
+    ) -> Result<Option<Self>, Error> {
+        let Some(mut this): Option<Self> = conn
             .select(
                 SystemSpacesId::VSpace as u32,
                 index_id,
@@ -67,10 +70,11 @@ impl SpaceMetadata {
             )
             .await?
             .into_iter()
-            .next()
-            .ok_or(Error::SpaceNotFound)?;
+            .next() else {
+                return Ok(None)
+            };
         this.load_indices(conn).await?;
-        Ok(this)
+        Ok(Some(this))
     }
 
     /// Load indices metadata into current space metadata.

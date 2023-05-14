@@ -1,24 +1,23 @@
 use std::io::Write;
 
-use anyhow::anyhow;
 use rmpv::Value;
 use serde::de::DeserializeOwned;
 use tracing::debug;
 
 use super::consts::keys;
-use crate::Error;
+use crate::errors::{DecodingError, EncodingError};
 
-pub fn value_to_map(value: Value) -> Result<Vec<(Value, Value)>, Error> {
+pub fn value_to_map(value: Value) -> Result<Vec<(Value, Value)>, DecodingError> {
     match value {
         Value::Map(x) => Ok(x),
-        _ => Err(Error::ResponseBodyDecode(anyhow!(
-            "OK response body for non-SQL should be map"
-        ))),
+        rest => {
+            Err(DecodingError::type_mismatch("map", rest.to_string()).in_other("OK response body"))
+        }
     }
 }
 
 /// Extract IPROTO_DATA from response body and deserialize it.
-pub fn deserialize_non_sql_response<T: DeserializeOwned>(value: Value) -> Result<T, Error> {
+pub fn deserialize_non_sql_response<T: DeserializeOwned>(value: Value) -> Result<T, DecodingError> {
     let map = value_to_map(value)?;
     for (k, v) in map {
         if matches!(k, Value::Integer(x) if x.as_u64().map_or(false, |y| y == keys::DATA as u64)) {
@@ -29,18 +28,16 @@ pub fn deserialize_non_sql_response<T: DeserializeOwned>(value: Value) -> Result
             debug!("Unexpected key encountered in response body: {:?}", k);
         }
     }
-    Err(Error::ResponseBodyDecode(anyhow!(
-        "No IPROTO_DATA key in MessagePack response body"
-    )))
+    Err(DecodingError::missing_key("DATA"))
 }
 
-pub fn write_kv_str(mut buf: &mut dyn Write, key: u8, value: &str) -> Result<(), anyhow::Error> {
+pub fn write_kv_str(mut buf: &mut dyn Write, key: u8, value: &str) -> Result<(), EncodingError> {
     rmp::encode::write_pfix(&mut buf, key)?;
     rmp::encode::write_str(&mut buf, value)?;
     Ok(())
 }
 
-pub fn write_kv_u32(mut buf: &mut dyn Write, key: u8, value: u32) -> Result<(), anyhow::Error> {
+pub fn write_kv_u32(mut buf: &mut dyn Write, key: u8, value: u32) -> Result<(), EncodingError> {
     rmp::encode::write_pfix(&mut buf, key)?;
     rmp::encode::write_u32(&mut buf, value)?;
     Ok(())
@@ -50,7 +47,7 @@ pub fn write_kv_array(
     mut buf: &mut dyn Write,
     key: u8,
     value: &[Value],
-) -> Result<(), anyhow::Error> {
+) -> Result<(), EncodingError> {
     rmp::encode::write_pfix(&mut buf, key)?;
     // TODO: safe conversion from usize to u32
     rmp::encode::write_array_len(&mut buf, value.len() as u32)?;

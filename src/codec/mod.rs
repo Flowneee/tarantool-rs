@@ -1,10 +1,10 @@
 use bytes::{Buf, BufMut, BytesMut};
-use rmp::{decode::ValueReadError, Marker};
+use rmp::Marker;
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::trace;
 
 use self::{request::Request, response::Response};
-use crate::TransportError;
+use crate::errors::{CodecDecodeError, CodecEncodeError, DecodingError};
 
 pub mod consts;
 pub mod request;
@@ -24,7 +24,7 @@ impl Default for LengthDecoder {
 }
 
 impl LengthDecoder {
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<usize>, ValueReadError> {
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<usize>, DecodingError> {
         if src.is_empty() {
             return Ok(None);
         }
@@ -66,13 +66,19 @@ impl LengthDecoder {
                 }
             }
             Marker::U64 => {
+                //
                 if src.len() > 8 {
                     src.get_u64() as usize
                 } else {
                     return Ok(None);
                 }
             }
-            rest => return Err(ValueReadError::TypeMismatch(rest)),
+            rest => {
+                return Err(DecodingError::type_mismatch(
+                    "unsigned integer",
+                    format!("{:?}", rest),
+                ))
+            }
         };
         trace!("decoded frame length: {}", length);
         *self = LengthDecoder::Value(length);
@@ -92,18 +98,20 @@ pub(crate) struct ClientCodec {
 impl Decoder for ClientCodec {
     type Item = Response;
 
-    type Error = TransportError;
+    type Error = CodecDecodeError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        let Some(next_frame_length) = self.length_decoder.decode(src)? else {
-            return Ok(None);
+        let Some(next_frame_length) = self.length_decoder
+            .decode(src)
+            .map_err(CodecDecodeError::Decode)? else {
+                return Ok(None);
         };
         if src.len() >= next_frame_length {
             self.length_decoder.reset();
             let frame_bytes = src.split_to(next_frame_length);
             Response::decode(frame_bytes.reader())
                 .map(Some)
-                .map_err(TransportError::MessagePackDecode)
+                .map_err(CodecDecodeError::Decode)
         } else {
             Ok(None)
         }
@@ -111,7 +119,7 @@ impl Decoder for ClientCodec {
 }
 
 impl Encoder<Request> for ClientCodec {
-    type Error = TransportError;
+    type Error = CodecEncodeError;
 
     // To omit creating intermediate BytesMut, encode message with 0 as length,
     // and after encoding calculate size of the encoded messages and overwrite
@@ -119,17 +127,19 @@ impl Encoder<Request> for ClientCodec {
     fn encode(&mut self, item: Request, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let begin_idx = dst.len();
 
+        // TODO: calculate necessary integer type instead of using u64 always
         // Write message with fictional length (0)
         let mut writer = dst.writer();
-        rmp::encode::write_u64(&mut writer, 0)?;
-        item.encode(&mut writer)
-            .map_err(TransportError::MessagePackEncode)?;
+        rmp::encode::write_u64(&mut writer, 0)
+            .map_err(|err| CodecEncodeError::Encode(err.into()))?;
+        item.encode(&mut writer).map_err(CodecEncodeError::Encode)?;
 
         // Calculate length and override length field with actual value
         let dst = writer.into_inner();
         let data_len = dst.len() - begin_idx - 9;
         let mut len_writer = dst[begin_idx..].writer();
-        rmp::encode::write_u64(&mut len_writer, data_len as u64)?;
+        rmp::encode::write_u64(&mut len_writer, data_len as u64)
+            .map_err(|err| CodecEncodeError::Encode(err.into()))?;
 
         Ok(())
     }

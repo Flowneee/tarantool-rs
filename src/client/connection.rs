@@ -91,6 +91,7 @@ impl Connection {
         let req = Request::new(body, stream_id);
         let _ = self.inner.async_rt_handle.spawn(async move {
             let res = futures::future::ready(req)
+                .err_into()
                 .and_then(|x| this.send_encoded_request(x))
                 .await;
             debug!("Response for background request: {:?}", res);

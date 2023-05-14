@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Arc};
+use std::fmt::Display;
 
 use futures::TryFutureExt;
 use tokio::{
@@ -10,11 +10,11 @@ use tracing::debug;
 use super::connection::Connection;
 use crate::{
     codec::{request::Request, response::Response},
-    TransportError,
+    Error,
 };
 
 // Arc here is necessary to send same error to all waiting in-flights
-pub(crate) type DispatcherResponse = Result<Response, Arc<TransportError>>;
+pub(crate) type DispatcherResponse = Result<Response, Error>;
 pub(crate) type DispatcherRequest = (Request, oneshot::Sender<DispatcherResponse>);
 
 pub(crate) struct DispatcherSender {
@@ -26,10 +26,10 @@ impl DispatcherSender {
         let (tx, rx) = oneshot::channel();
         self.tx
             .send((request, tx))
-            .map_err(|_| TransportError::ConnectionClosed.into())
+            .map_err(|_| Error::ConnectionClosed)
             .and_then(|_| async {
                 rx.await
-                    .map_err(|_| TransportError::ConnectionClosed.into())
+                    .map_err(|_| Error::ConnectionClosed)
                     .and_then(|x| x)
             })
             .await
@@ -49,7 +49,7 @@ impl Dispatcher {
         addr: A,
         user: Option<&str>,
         password: Option<&str>,
-    ) -> Result<(Self, DispatcherSender), TransportError>
+    ) -> Result<(Self, DispatcherSender), Error>
     where
         A: ToSocketAddrs + Display,
     {
@@ -73,7 +73,7 @@ impl Dispatcher {
                 next = self.rx.recv() => {
                     if let Some((request, tx)) = next {
                         if let Err(err) = self.conn.send_request(request, tx).await {
-                            break err;
+                            break err.into();
                         }
                     } else {
                         debug!("All senders dropped");

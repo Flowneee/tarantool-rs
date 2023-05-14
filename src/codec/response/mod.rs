@@ -1,10 +1,12 @@
 use std::io::Read;
 
-use anyhow::{bail, Context};
 use tracing::{debug, error};
 
 use super::consts::response_codes::{ERROR_RANGE_END, ERROR_RANGE_START, OK};
-use crate::{codec::consts::keys, errors::ErrorResponse};
+use crate::{
+    codec::consts::keys,
+    errors::{DecodingError, ErrorResponse},
+};
 
 // TODO: add out-of-band (I.e. IPROTO_CHUNK)
 // TODO: actually implement extra error data
@@ -27,7 +29,7 @@ impl Response {
     // Use [`anyhow::Error`] because any error would mean either entirely broken
     // implementation of protocol or underlying I/O error, which currently would be
     // implementation bug as well.
-    pub(super) fn decode(mut buf: impl Read) -> Result<Self, anyhow::Error> {
+    pub(super) fn decode(mut buf: impl Read) -> Result<Self, DecodingError> {
         let map_len = rmp::decode::read_map_len(&mut buf)?;
         let mut response_code: Option<u32> = None;
         let mut sync: Option<u32> = None;
@@ -52,13 +54,13 @@ impl Response {
             }
         }
         let Some(response_code) = response_code else {
-            bail!("Missing response code in response")
+            return Err(DecodingError::missing_key("RESPONSE_CODE"));
         };
         let Some(sync) = sync else {
-            bail!("Missing sync in response")
+            return Err(DecodingError::missing_key("SYNC"));
         };
         let Some(schema_version) = schema_version else {
-            bail!("Missing schema version in response")
+            return Err(DecodingError::missing_key("SCHEMA_VERSION"));
         };
         let body = match response_code {
             OK => ResponseBody::Ok(rmpv::decode::read_value(&mut buf)?),
@@ -74,13 +76,16 @@ impl Response {
                             // TODO: rewrite string decoding
                             let str_len = rmp::decode::read_str_len(&mut buf)?;
                             let mut str_buf = vec![0; str_len as usize];
-                            buf.read_exact(&mut str_buf)
-                                .context("Failed to decode error description")?;
+                            buf.read_exact(&mut str_buf).map_err(|err| {
+                                DecodingError::message_pack(err).in_key("ERROR_24")
+                            })?;
                             // TODO: find a way to to this safe
-                            description = Some(
-                                String::from_utf8(str_buf)
-                                    .context("Error description is not valid UTF-8 string")?,
-                            );
+                            description = Some(String::from_utf8(str_buf).map_err(|_err| {
+                                DecodingError::message_pack(anyhow::anyhow!(
+                                    "String is not valid UTF-8 string"
+                                ))
+                                .in_key("ERROR_24")
+                            })?);
                         }
                         keys::ERROR => {
                             extra = Some(rmpv::decode::read_value(&mut buf)?);
@@ -92,7 +97,7 @@ impl Response {
                     }
                 }
                 let Some(description) = description else {
-                    bail!( "Missing error description in response body")
+                    return Err(DecodingError::missing_key("ERROR_24"));
                 };
                 ResponseBody::Error(ErrorResponse {
                     code,
@@ -100,7 +105,7 @@ impl Response {
                     extra,
                 })
             }
-            rest => bail!("Unknown response code: {}", rest),
+            rest => return Err(DecodingError::unknown_response_code(rest)),
         };
         Ok(Self {
             sync,

@@ -21,12 +21,12 @@ pub use rmpv::Value;
 pub use self::{
     client::*,
     codec::consts::{IteratorType, TransactionIsolationLevel},
-    errors::{Error, TransportError},
+    errors::Error,
 };
 
+pub mod errors;
 pub mod utils;
 
 mod client;
 mod codec;
-mod errors;
 mod transport;

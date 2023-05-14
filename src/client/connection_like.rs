@@ -50,7 +50,7 @@ pub trait ConnectionLike: private::Sealed {
         T: DeserializeOwned,
     {
         let body = self.send_request(Eval::new(expr, args)).await?;
-        deserialize_non_sql_response(body)
+        deserialize_non_sql_response(body).map_err(Into::into)
     }
 
     // TODO: docs
@@ -60,7 +60,7 @@ pub trait ConnectionLike: private::Sealed {
         T: DeserializeOwned,
     {
         let body = self.send_request(Call::new(function_name, args)).await?;
-        deserialize_non_sql_response(body)
+        deserialize_non_sql_response(body).map_err(Into::into)
     }
 
     // TODO: docs
@@ -81,7 +81,7 @@ pub trait ConnectionLike: private::Sealed {
                 space_id, index_id, limit, offset, iterator, keys,
             ))
             .await?;
-        deserialize_non_sql_response(body)
+        deserialize_non_sql_response(body).map_err(Into::into)
     }
 
     // TODO: docs

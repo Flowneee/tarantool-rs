@@ -1,7 +1,7 @@
 use anyhow::Context;
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::Error;
+use crate::errors::EncodingError;
 
 pub(crate) use self::{
     auth::Auth, begin::Begin, call::Call, commit::Commit, delete::Delete, eval::Eval, id::Id,
@@ -46,7 +46,7 @@ pub trait RequestBody {
     /// crate use [`bytes::BufMut::writer`], this methods shouldn't throw error in
     /// normal case, so we don't care about actual type. If necessary, it is possible
     /// to downcast error to specific type.
-    fn encode(&self, buf: &mut dyn Write) -> Result<(), anyhow::Error>;
+    fn encode(&self, buf: &mut dyn Write) -> Result<(), EncodingError>;
 }
 
 pub(crate) struct Request {
@@ -60,9 +60,12 @@ pub(crate) struct Request {
 }
 
 impl Request {
-    pub fn new<Body: RequestBody>(body: Body, stream_id: Option<u32>) -> Result<Self, Error> {
+    pub fn new<Body: RequestBody>(
+        body: Body,
+        stream_id: Option<u32>,
+    ) -> Result<Self, EncodingError> {
         let mut buf = BytesMut::with_capacity(DEFAULT_ENCODE_BUFFER_SIZE).writer();
-        body.encode(&mut buf).map_err(Error::RequestBodyEncode)?;
+        body.encode(&mut buf)?;
         Ok(Self {
             request_type: Body::request_type(),
             sync: 0,
@@ -72,7 +75,7 @@ impl Request {
         })
     }
 
-    pub fn encode(&self, mut buf: impl Write) -> Result<(), anyhow::Error> {
+    pub fn encode(&self, mut buf: impl Write) -> Result<(), EncodingError> {
         let map_len = 2
             + if self.schema_version.is_some() { 1 } else { 0 }
             + if self.stream_id.is_some() { 1 } else { 0 };
@@ -91,6 +94,7 @@ impl Request {
         }
         buf.write_all(&self.encoded_body)
             .context("Failed to write encoded body to buffer")
+            .map_err(EncodingError::MessagePack)
     }
 
     pub(crate) fn sync_mut(&mut self) -> &mut u32 {

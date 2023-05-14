@@ -4,9 +4,12 @@ use std::io::Write;
 
 use rmpv::Value;
 
-use crate::codec::{
-    consts::{keys, RequestType},
-    utils::{write_kv_array, write_kv_u32},
+use crate::{
+    codec::{
+        consts::{keys, RequestType},
+        utils::{write_kv_array, write_kv_u32},
+    },
+    errors::EncodingError,
 };
 
 use super::RequestBody;
@@ -47,7 +50,7 @@ impl RequestBody for Update {
     }
 
     // NOTE: `&mut buf: mut` is required since I don't get why compiler complain
-    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), anyhow::Error> {
+    fn encode(&self, mut buf: &mut dyn Write) -> Result<(), EncodingError> {
         let map_len = if self.index_base.is_some() { 5 } else { 4 };
         rmp::encode::write_map_len(&mut buf, map_len)?;
         write_kv_u32(buf, keys::SPACE_ID, self.space_id)?;

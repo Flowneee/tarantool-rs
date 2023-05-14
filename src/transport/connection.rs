@@ -1,10 +1,7 @@
 use std::{
     collections::HashMap,
     fmt::Display,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicU32, Ordering},
 };
 
 use futures::{SinkExt, TryStreamExt};
@@ -23,7 +20,7 @@ use crate::{
         response::{Response, ResponseBody},
         ClientCodec, Greeting,
     },
-    errors::TransportError,
+    errors::{CodecDecodeError, CodecEncodeError, Error},
 };
 
 pub(crate) struct Connection {
@@ -38,7 +35,7 @@ impl Connection {
         addr: A,
         user: Option<&str>,
         password: Option<&str>,
-    ) -> Result<Self, TransportError>
+    ) -> Result<Self, Error>
     where
         A: ToSocketAddrs + Display,
     {
@@ -65,13 +62,7 @@ impl Connection {
         Ok(this)
     }
 
-    // TODO: handle errors
-    async fn auth(
-        &mut self,
-        user: &str,
-        password: Option<&str>,
-        salt: &[u8],
-    ) -> Result<(), TransportError> {
+    async fn auth(&mut self, user: &str, password: Option<&str>, salt: &[u8]) -> Result<(), Error> {
         let mut request = Request::new(Auth::new(user, password, salt), None).unwrap();
         *request.sync_mut() = self.next_sync();
 
@@ -81,7 +72,7 @@ impl Connection {
         let resp = self.get_next_stream_value().await?;
         match resp.body {
             ResponseBody::Ok(_x) => Ok(()),
-            ResponseBody::Error(_err) => panic!("Auth error"),
+            ResponseBody::Error(err) => Err(Error::Auth(err)),
         }
     }
 
@@ -94,8 +85,9 @@ impl Connection {
         &mut self,
         mut request: Request,
         tx: oneshot::Sender<DispatcherResponse>,
-    ) -> Result<(), TransportError> {
-        *request.sync_mut() = self.next_sync();
+    ) -> Result<(), tokio::io::Error> {
+        let sync = self.next_sync();
+        *request.sync_mut() = sync;
         trace!(
             "Sending request with sync {}, stream_id {:?}",
             request.sync,
@@ -109,10 +101,7 @@ impl Connection {
                 .in_flights
                 .insert(request.sync, old)
                 .expect("Shouldn't panic, value was just inserted");
-            if new
-                .send(Err(Arc::new(TransportError::DuplicatedSync(request.sync))))
-                .is_err()
-            {
+            if new.send(Err(Error::DuplicatedSync(request.sync))).is_err() {
                 warn!(
                     "Failed to pass error to sync {}, receiver dropped",
                     request.sync
@@ -120,7 +109,22 @@ impl Connection {
             }
             return Ok(());
         }
-        self.stream.send(request).await
+        match self.stream.send(request).await {
+            Ok(x) => Ok(x),
+            Err(CodecEncodeError::Encode(err)) => {
+                if self
+                    .in_flights
+                    .remove(&sync)
+                    .expect("Shouldn't panic, value was just inserted")
+                    .send(Err(err.into()))
+                    .is_err()
+                {
+                    warn!("Failed to pass error to sync {}, receiver dropped", sync);
+                }
+                Ok(())
+            }
+            Err(CodecEncodeError::Io(err)) => Err(err),
+        }
     }
 
     fn pass_response(&mut self, response: Response) {
@@ -134,15 +138,15 @@ impl Connection {
         }
     }
 
-    async fn get_next_stream_value(&mut self) -> Result<Response, TransportError> {
+    async fn get_next_stream_value(&mut self) -> Result<Response, CodecDecodeError> {
         match self.stream.try_next().await {
             Ok(Some(x)) => Ok(x),
-            Ok(None) => Err(TransportError::ConnectionClosed),
+            Ok(None) => Err(CodecDecodeError::Closed),
             Err(e) => Err(e),
         }
     }
 
-    pub(super) async fn handle_next_response(&mut self) -> Result<(), TransportError> {
+    pub(super) async fn handle_next_response(&mut self) -> Result<(), CodecDecodeError> {
         let resp = self.get_next_stream_value().await?;
         trace!(
             "Received response for sync {}, schema version {}",
@@ -154,10 +158,9 @@ impl Connection {
     }
 
     /// Send error to all in flight requests and drop current transport.
-    pub(super) fn finish_with_error(&mut self, err: TransportError) {
-        let err = Arc::new(err);
+    pub(super) fn finish_with_error(&mut self, err: CodecDecodeError) {
         for (_, tx) in self.in_flights.drain() {
-            let _ = tx.send(Err(err.clone()));
+            let _ = tx.send(Err(err.clone().into()));
         }
     }
 }
