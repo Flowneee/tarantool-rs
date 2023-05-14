@@ -13,26 +13,27 @@ use crate::{codec::request::RequestBody, errors::Error};
 /// ```rust,compile
 /// use tarantool_rs::{Connection, ConnectionLike};
 /// # use futures::FutureExt;
+/// # use rmpv::Value;
 ///
 /// # async fn async_wrapper() {
 /// let connection = Connection::builder().build("localhost:3301").await.unwrap();
 ///
 /// // This will print 'fast' and then 'slow'
 /// let eval_slow_fut = connection
-///     .eval("fiber = require('fiber'); fiber.sleep(0.5); return ...;", vec!["slow".into()])
+///     .eval::<_, Value>("fiber = require('fiber'); fiber.sleep(0.5); return ...;", vec!["slow".into()])
 ///     .inspect(|res| println!("{:?}", res));
 /// let eval_fast_fut = connection
-///     .eval("return ...;", vec!["fast".into()])
+///     .eval::<_, Value>("return ...;", vec!["fast".into()])
 ///     .inspect(|res| println!("{:?}", res));
 /// let _ = tokio::join!(eval_slow_fut, eval_fast_fut);
 ///
 /// // This will print 'slow' and then 'fast', since slow request was created first and have smaller sync
 /// let stream = connection.stream();
 /// let eval_slow_fut = stream
-///     .eval("fiber = require('fiber'); fiber.sleep(0.5); return ...;", vec!["slow".into()])
+///     .eval::<_, Value>("fiber = require('fiber'); fiber.sleep(0.5); return ...;", vec!["slow".into()])
 ///     .inspect(|res| println!("{:?}", res));
 /// let eval_fast_fut = stream
-///     .eval("return ...;", vec!["fast".into()])
+///     .eval::<_, Value>("return ...;", vec!["fast".into()])
 ///     .inspect(|res| println!("{:?}", res));
 /// let _ = tokio::join!(eval_slow_fut, eval_fast_fut);
 /// # }

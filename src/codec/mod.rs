@@ -24,16 +24,15 @@ impl Default for LengthDecoder {
 }
 
 impl LengthDecoder {
-    // TODO: this function uses hidden internal functions from rmp (read_data_*)
-    // need to rewrite this
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<usize>, ValueReadError> {
         if src.is_empty() {
             return Ok(None);
         }
-        let mut reader = src.reader();
         let marker = match self {
             LengthDecoder::NoMarker => {
-                let marker = rmp::decode::read_marker(&mut reader)?;
+                // Safety: `src.get_u8` might panic if there is no enough data,
+                // but in this case we checked previously that `src` is not empty.
+                let marker = Marker::from_u8(src.get_u8());
                 *self = Self::Marker(marker);
                 trace!("decoded length marker: {:?}", marker);
                 marker
@@ -41,32 +40,34 @@ impl LengthDecoder {
             LengthDecoder::Marker(x) => *x,
             LengthDecoder::Value(x) => return Ok(Some(*x)),
         };
+        // Safety: `src.get_uXX` might panic if there is no enough data,
+        // but in this case we check before reading, so it shouldn't panic.
         let length = match marker {
             Marker::FixPos(x) => x as usize,
             Marker::U8 => {
-                if reader.get_ref().len() > 2 {
-                    rmp::decode::read_data_u8(&mut reader)? as usize
+                if src.len() > 1 {
+                    src.get_u8() as usize
                 } else {
                     return Ok(None);
                 }
             }
             Marker::U16 => {
-                if reader.get_ref().len() > 3 {
-                    rmp::decode::read_data_u16(&mut reader)? as usize
+                if src.len() > 2 {
+                    src.get_u16() as usize
                 } else {
                     return Ok(None);
                 }
             }
             Marker::U32 => {
-                if reader.get_ref().len() > 5 {
-                    rmp::decode::read_data_u32(&mut reader)? as usize
+                if src.len() > 4 {
+                    src.get_u32() as usize
                 } else {
                     return Ok(None);
                 }
             }
             Marker::U64 => {
-                if reader.get_ref().len() > 9 {
-                    rmp::decode::read_data_u64(&mut reader)? as usize
+                if src.len() > 8 {
+                    src.get_u64() as usize
                 } else {
                     return Ok(None);
                 }
@@ -94,9 +95,7 @@ impl Decoder for ClientCodec {
     type Error = TransportError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        let next_frame_length = if let Some(x) = self.length_decoder.decode(src)? {
-            x
-        } else {
+        let Some(next_frame_length) = self.length_decoder.decode(src)? else {
             return Ok(None);
         };
         if src.len() >= next_frame_length {
