@@ -147,6 +147,10 @@ impl<T: UniqueIdName> UniqueIdNameMap<T> {
     pub fn len(&self) -> usize {
         self.by_name.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl<T> Default for UniqueIdNameMap<T> {

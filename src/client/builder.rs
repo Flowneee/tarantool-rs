@@ -20,7 +20,7 @@ pub struct ConnectionBuilder {
 }
 
 impl ConnectionBuilder {
-    /// Create connection to Tarantool using provided address and test it using PING.
+    /// Create connection to Tarantool using provided address.
     pub async fn build<A>(&self, addr: A) -> Result<Connection, Error>
     where
         A: ToSocketAddrs + Display,
@@ -51,7 +51,7 @@ impl ConnectionBuilder {
         Ok(conn)
     }
 
-    /// Sets user login ane, optinally, password, used for this connection.
+    /// Sets user login and, optionally, password, used for this connection.
     ///
     /// AUTH message sent upon connecting to server.
     pub fn auth(&mut self, user: &str, password: Option<&str>) -> &mut Self {
