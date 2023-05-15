@@ -1,4 +1,5 @@
 use std::{
+    borrow::Borrow,
     collections::HashSet,
     fmt,
     hash::{Hash, Hasher},
@@ -9,7 +10,7 @@ use anyhow::bail;
 
 #[doc(hidden)]
 pub trait UniqueIdName {
-    fn id(&self) -> u32;
+    fn id(&self) -> &u32;
     fn name(&self) -> &str;
 }
 
@@ -35,6 +36,12 @@ impl<T> Clone for ByName<T> {
     }
 }
 
+impl<T: UniqueIdName> Borrow<str> for ByName<T> {
+    fn borrow(&self) -> &str {
+        self.0.name()
+    }
+}
+
 struct ById<T>(Arc<T>);
 
 impl<T: UniqueIdName> Hash for ById<T> {
@@ -54,6 +61,12 @@ impl<T: UniqueIdName> Eq for ById<T> {}
 impl<T> Clone for ById<T> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
+    }
+}
+
+impl<T: UniqueIdName> Borrow<u32> for ById<T> {
+    fn borrow(&self) -> &u32 {
+        self.0.id()
     }
 }
 
@@ -105,6 +118,35 @@ impl<T: UniqueIdName> UniqueIdNameMap<T> {
         }
         Ok(old_name_value.map(|x| x.0))
     }
+
+    pub(crate) fn try_from_iter<I>(iter: I) -> Result<Self, anyhow::Error>
+    where
+        I: IntoIterator<Item = T>,
+    {
+        let iter = iter.into_iter();
+        let size_hint = if let (start, Some(end)) = iter.size_hint() {
+            end.saturating_sub(start)
+        } else {
+            1
+        };
+        let mut map = Self::with_capacity(size_hint);
+        for x in iter {
+            let _ = map.insert(x)?;
+        }
+        Ok(map)
+    }
+
+    pub fn get_by_name(&self, k: &str) -> Option<&T> {
+        self.by_name.get(k).map(|x| &*x.0)
+    }
+
+    pub fn get_by_id(&self, k: u32) -> Option<&T> {
+        self.by_id.get(&k).map(|x| &*x.0)
+    }
+
+    pub fn len(&self) -> usize {
+        self.by_name.len()
+    }
 }
 
 impl<T> Default for UniqueIdNameMap<T> {
@@ -127,24 +169,5 @@ impl<T: fmt::Debug> fmt::Debug for UniqueIdNameMap<T> {
         f.debug_list()
             .entries(self.by_id.iter().map(|x| (&*x.0)))
             .finish()
-    }
-}
-
-impl<T: UniqueIdName> UniqueIdNameMap<T> {
-    pub(crate) fn try_from_iter<I>(iter: I) -> Result<Self, anyhow::Error>
-    where
-        I: IntoIterator<Item = T>,
-    {
-        let iter = iter.into_iter();
-        let size_hint = if let (start, Some(end)) = iter.size_hint() {
-            end.saturating_sub(start)
-        } else {
-            1
-        };
-        let mut map = Self::with_capacity(size_hint);
-        for x in iter {
-            let _ = map.insert(x)?;
-        }
-        Ok(map)
     }
 }

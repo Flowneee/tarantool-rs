@@ -103,4 +103,9 @@ impl SpaceMetadata {
     pub fn name(&self) -> &str {
         self.name.as_ref()
     }
+
+    /// Returns map of idices in this space.
+    pub fn indices(&self) -> &UniqueIdNameMap<IndexMetadata> {
+        &self.indices
+    }
 }

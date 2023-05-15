@@ -72,8 +72,8 @@ impl IndexMetadata {
 }
 
 impl UniqueIdName for IndexMetadata {
-    fn id(&self) -> u32 {
-        self.index_id
+    fn id(&self) -> &u32 {
+        &self.index_id
     }
 
     fn name(&self) -> &str {

@@ -10,14 +10,14 @@ For examples of how to use this crate check `examples/` folder.
 
 ## Features
 
-* [x] authorization;
-* [x] evaluating Lua expressions)
-* [x] function calling)
-* [x] select from spaces
-* [x] "DML" requests (insert/update/upsert/replace/delete)
+* [x] authorization
+* [x] evaluating Lua expressions
+* [x] remote function calling
+* [x] CRUD operations
 * [x] transaction control (begin/commit/rollback)
 * [ ] SQL requests
 * [ ] chunked responses
+* [ ] watchers and events
 * [ ] reconnection in background
 * [ ] connection pooling
 * [ ] automatic schema fetching and reloading

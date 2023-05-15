@@ -2,7 +2,7 @@ use tarantool_rs::{Connection, ConnectionLike, Value};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    tracing_subscriber::fmt::init();
+    pretty_env_logger::init();
 
     let connection = Connection::builder().build("127.0.0.1:3301").await?;
     connection.clone().ping().await?;
