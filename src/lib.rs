@@ -9,6 +9,7 @@
 // * [ ] background schema fetching, reloading and invalidating
 // * [ ] triggers on connection events (connect/disconnect/schema reloading)
 // * [ ] SQL
+// * [ ] graceful shutdown protocol
 //
 // Other
 //
@@ -20,6 +21,7 @@
 pub use rmpv::Value;
 
 pub use self::{
+    builder::{ConnectionBuilder, ReconnectInterval},
     client::*,
     codec::consts::{IteratorType, TransactionIsolationLevel},
     errors::Error,
@@ -28,6 +30,7 @@ pub use self::{
 pub mod errors;
 pub mod utils;
 
+mod builder;
 mod client;
 mod codec;
 mod transport;

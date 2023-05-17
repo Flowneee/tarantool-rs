@@ -12,9 +12,13 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    let _ = pretty_env_logger::init();
+
     let args = Args::parse();
 
-    let conn = Connection::builder().build(&args.tarantool_address).await?;
+    let conn = Connection::builder()
+        .build(args.tarantool_address.clone())
+        .await?;
     println!("connected to Tarantool instance {}", args.tarantool_address);
 
     let mut rl = DefaultEditor::new()?;

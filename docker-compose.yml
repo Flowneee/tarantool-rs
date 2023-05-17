@@ -1,10 +1,8 @@
 services:
   tarantool:
     image: tarantool/tarantool
-    volumes:
-      - ./tests:/opt/tarantool
     ports:
       - "3301:3301"
     environment:
       TT_MEMTX_USE_MVCC_ENGINE: true
-    command: ["tarantool", "/opt/tarantool/test_data.lua"]
+    command: ["tarantool"]

@@ -15,12 +15,15 @@ For examples of how to use this crate check `examples/` folder.
 * [x] remote function calling
 * [x] CRUD operations
 * [x] transaction control (begin/commit/rollback)
+* [x] reconnection in background
 * [ ] SQL requests
 * [ ] chunked responses
 * [ ] watchers and events
-* [ ] reconnection in background
 * [ ] connection pooling
 * [ ] automatic schema fetching and reloading
+* [ ] graceful shutdown protocol support
+* [ ] pre Tarantool 2.10 versions support
+* [ ] customizable connection features (streams/watchers/mvcc)
 * [ ] ...
 
 

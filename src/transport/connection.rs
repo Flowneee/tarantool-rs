@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     fmt::Display,
     sync::atomic::{AtomicU32, Ordering},
+    time::Duration,
 };
 
 use futures::{SinkExt, TryStreamExt};
@@ -31,7 +32,7 @@ pub(crate) struct Connection {
 
 // TODO: cancel
 impl Connection {
-    pub(crate) async fn new<A>(
+    async fn new_inner<A>(
         addr: A,
         user: Option<&str>,
         password: Option<&str>,
@@ -60,6 +61,24 @@ impl Connection {
         }
 
         Ok(this)
+    }
+
+    pub(super) async fn new<A>(
+        addr: A,
+        user: Option<&str>,
+        password: Option<&str>,
+        timeout: Option<Duration>,
+    ) -> Result<Self, Error>
+    where
+        A: ToSocketAddrs + Display,
+    {
+        match timeout {
+            Some(dur) => tokio::time::timeout(dur, Self::new_inner(addr, user, password))
+                .await
+                .map_err(|_| Error::ConnectTimeout)
+                .and_then(|x| x),
+            None => Self::new_inner(addr, user, password).await,
+        }
     }
 
     async fn auth(&mut self, user: &str, password: Option<&str>, salt: &[u8]) -> Result<(), Error> {

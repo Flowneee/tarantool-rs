@@ -11,10 +11,9 @@ use futures::{Future, TryFutureExt};
 use rmpv::Value;
 use tracing::debug;
 
-use super::{
-    connection_like::ConnectionLike, ConnectionBuilder, Stream, Transaction, TransactionBuilder,
-};
+use super::{connection_like::ConnectionLike, Stream, Transaction, TransactionBuilder};
 use crate::{
+    builder::ConnectionBuilder,
     codec::{
         consts::TransactionIsolationLevel,
         request::{Id, Request, RequestBody},

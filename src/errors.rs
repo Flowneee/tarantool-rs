@@ -29,6 +29,14 @@ pub enum Error {
     /// Error, returned in response from Tarantool instance.
     #[error("Error response: {0}")]
     Response(#[from] ErrorResponse),
+
+    /// Timeout.
+    #[error("Timeout")]
+    Timeout,
+    /// Timeout while establishing connection.
+    #[error("Connect timeout")]
+    ConnectTimeout,
+
     /// Authorization error.
     #[error("Authorization error: {} (code {})" ,.0.description, .0.code)]
     Auth(#[source] ErrorResponse),

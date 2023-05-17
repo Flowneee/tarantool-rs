@@ -127,12 +127,14 @@ impl TransactionBuilder {
         }
     }
 
-    pub fn timeout(&mut self, timeout: Option<Duration>) {
-        self.timeout_secs = timeout.as_ref().map(Duration::as_secs_f64);
+    pub fn timeout(&mut self, timeout: impl Into<Option<Duration>>) -> &mut Self {
+        self.timeout_secs = timeout.into().as_ref().map(Duration::as_secs_f64);
+        self
     }
 
-    pub fn isolation_level(&mut self, isolation_level: TransactionIsolationLevel) {
+    pub fn isolation_level(&mut self, isolation_level: TransactionIsolationLevel) -> &mut Self {
         self.isolation_level = isolation_level;
+        self
     }
 
     pub async fn begin(&self) -> Result<Transaction, Error> {
