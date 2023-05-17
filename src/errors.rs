@@ -61,6 +61,10 @@ pub enum Error {
     /// Underlying TCP connection was closed.
     #[error("TCP connection closed")]
     ConnectionClosed,
+
+    /// Other errors that don't deserve a separate variant.
+    #[error(transparent)]
+    Other(anyhow::Error),
 }
 
 impl From<tokio::io::Error> for Error {
