@@ -1,10 +1,15 @@
+use anyhow::Context;
+use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
 use bytes::{Buf, BufMut, BytesMut};
 use rmp::Marker;
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::trace;
 
 use self::{request::Request, response::Response};
-use crate::errors::{CodecDecodeError, CodecEncodeError, DecodingError};
+use crate::{
+    errors::{CodecDecodeError, CodecEncodeError, DecodingError},
+    Error,
+};
 
 pub mod consts;
 pub mod request;
@@ -160,7 +165,7 @@ impl Greeting {
 
     // TODO: err
     /// Decode greeting from provided buffer without checking boundaries.
-    pub fn decode(buffer: [u8; Self::SIZE]) -> Self {
+    pub fn decode(buffer: [u8; Self::SIZE]) -> Result<Self, Error> {
         let line1 = &buffer[0..62];
         let line2 = &buffer[64..126];
         let salt_b64 = line2
@@ -169,11 +174,13 @@ impl Greeting {
             .rev()
             .find(|x| *x.1 != b' ')
             .map_or(&b""[..], |(idx, _)| &line2[0..idx]);
-        // TODO error on empty salt
-        let salt = base64::decode(salt_b64).expect("Valid base64");
-        Self {
+        let salt = STANDARD_NO_PAD
+            .decode(salt_b64)
+            .context("Failed to decode salt from base64")
+            .map_err(Error::Other)?;
+        Ok(Self {
             server: String::from_utf8_lossy(line1).into_owned(),
             salt,
-        }
+        })
     }
 }

@@ -46,7 +46,7 @@ impl Connection {
 
         let mut greeting_buffer = [0u8; Greeting::SIZE];
         tcp.read_exact(&mut greeting_buffer).await?;
-        let greeting = Greeting::decode(greeting_buffer);
+        let greeting = Greeting::decode(greeting_buffer)?;
         debug!("Server: {}", greeting.server);
         trace!("Salt: {:?}", greeting.salt);
 
