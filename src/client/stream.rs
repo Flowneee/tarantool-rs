@@ -1,8 +1,13 @@
 use async_trait::async_trait;
+use futures::future::BoxFuture;
 use rmpv::Value;
 
 use super::{Connection, ConnectionLike, Transaction, TransactionBuilder};
-use crate::{codec::request::RequestBody, errors::Error};
+use crate::{
+    codec::request::{Request, RequestBody},
+    errors::Error,
+    Executor, Result,
+};
 
 /// Abstraction, providing sequential processing of requests.
 ///
@@ -53,10 +58,21 @@ impl Stream {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
+impl Executor for Stream {
+    async fn send_request(&self, request: Request) -> Result<Value> {
+        self.conn.send_request(request).await
+    }
+}
+
+#[async_trait]
 impl ConnectionLike for Stream {
-    async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error> {
-        self.conn.send_request(body, Some(self.stream_id)).await
+    fn send_any_request<R>(&self, body: R) -> BoxFuture<Result<Value>>
+    where
+        R: RequestBody,
+    {
+        self.conn
+            .encode_and_send_request(body, Some(self.stream_id))
     }
 
     fn stream(&self) -> Stream {
@@ -67,7 +83,7 @@ impl ConnectionLike for Stream {
         self.conn.transaction_builder()
     }
 
-    async fn transaction(&self) -> Result<Transaction, Error> {
+    async fn transaction(&self) -> Result<Transaction> {
         self.conn.transaction().await
     }
 }

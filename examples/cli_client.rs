@@ -11,7 +11,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
+async fn main() -> std::result::Result<(), anyhow::Error> {
     let _ = pretty_env_logger::init();
 
     let args = Args::parse();

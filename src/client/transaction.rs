@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
+use futures::future::BoxFuture;
 use rmpv::Value;
 use tracing::debug;
 
@@ -8,9 +9,10 @@ use super::{Connection, ConnectionLike, Stream};
 use crate::{
     codec::{
         consts::TransactionIsolationLevel,
-        request::{Begin, Commit, RequestBody, Rollback},
+        request::{Begin, Commit, Request, RequestBody, Rollback},
     },
     errors::Error,
+    Executor, Result,
 };
 
 /// Started transaction ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#binary-protocol-streams)).
@@ -30,7 +32,7 @@ impl Transaction {
         conn: Connection,
         timeout_secs: Option<f64>,
         isolation_level: TransactionIsolationLevel,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self> {
         let stream_id = conn.next_stream_id();
         let this = Self {
             conn,
@@ -45,28 +47,28 @@ impl Transaction {
         &self,
         transaction_isolation_level: TransactionIsolationLevel,
         timeout_secs: Option<f64>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         debug!("Beginning tranasction on stream {}", self.stream_id);
-        self.send_request(Begin::new(timeout_secs, transaction_isolation_level))
+        self.send_any_request(Begin::new(timeout_secs, transaction_isolation_level))
             .await
             .map(drop)
     }
 
     /// Commit tranasction.
-    pub async fn commit(mut self) -> Result<(), Error> {
+    pub async fn commit(mut self) -> Result<()> {
         if !self.finished {
             debug!("Commiting tranasction on stream {}", self.stream_id);
-            let _ = self.send_request(Commit::default()).await?;
+            let _ = self.send_any_request(Commit::default()).await?;
             self.finished = true;
         }
         Ok(())
     }
 
     /// Rollback tranasction.
-    pub async fn rollback(mut self) -> Result<(), Error> {
+    pub async fn rollback(mut self) -> Result<()> {
         if !self.finished {
             debug!("Rolling back tranasction on stream {}", self.stream_id);
-            let _ = self.send_request(Rollback::default()).await?;
+            let _ = self.send_any_request(Rollback::default()).await?;
             self.finished = true;
         }
         Ok(())
@@ -87,10 +89,21 @@ impl Drop for Transaction {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
+impl Executor for Transaction {
+    async fn send_request(&self, request: Request) -> Result<Value> {
+        self.conn.send_request(request).await
+    }
+}
+
+#[async_trait]
 impl ConnectionLike for Transaction {
-    async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error> {
-        self.conn.send_request(body, Some(self.stream_id)).await
+    fn send_any_request<R>(&self, body: R) -> BoxFuture<Result<Value>>
+    where
+        R: RequestBody,
+    {
+        self.conn
+            .encode_and_send_request(body, Some(self.stream_id))
     }
 
     // TODO: do we need to repeat this in all ConnetionLike implementations?
@@ -102,7 +115,7 @@ impl ConnectionLike for Transaction {
         self.conn.transaction_builder()
     }
 
-    async fn transaction(&self) -> Result<Transaction, Error> {
+    async fn transaction(&self) -> Result<Transaction> {
         self.conn.transaction().await
     }
 }
@@ -137,7 +150,7 @@ impl TransactionBuilder {
         self
     }
 
-    pub async fn begin(&self) -> Result<Transaction, Error> {
+    pub async fn begin(&self) -> Result<Transaction> {
         Transaction::new(
             self.connection.clone(),
             self.timeout_secs,

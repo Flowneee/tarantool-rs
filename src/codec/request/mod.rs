@@ -49,14 +49,15 @@ pub trait RequestBody {
     fn encode(&self, buf: &mut dyn Write) -> Result<(), EncodingError>;
 }
 
-pub(crate) struct Request {
+#[doc(hidden)]
+pub struct Request {
     /// By default `sync` is set to 0 and replaced with
     /// actual value when reaching [`crate::transport::Connection`].
-    pub request_type: RequestType,
-    pub sync: u32,
-    pub schema_version: Option<u32>,
-    pub stream_id: Option<u32>,
-    pub encoded_body: Bytes,
+    pub(crate) request_type: RequestType,
+    pub(crate) sync: u32,
+    pub(crate) schema_version: Option<u32>,
+    pub(crate) stream_id: Option<u32>,
+    pub(crate) encoded_body: Bytes,
 }
 
 impl Request {

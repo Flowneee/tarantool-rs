@@ -34,3 +34,5 @@ mod builder;
 mod client;
 mod codec;
 mod transport;
+
+pub type Result<T> = std::result::Result<T, Error>;

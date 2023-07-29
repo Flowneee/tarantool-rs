@@ -7,11 +7,11 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::{Future, TryFutureExt};
+use futures::{future::BoxFuture, Future, TryFutureExt};
 use rmpv::Value;
 use tracing::debug;
 
-use super::{connection_like::ConnectionLike, Stream, Transaction, TransactionBuilder};
+use super::{connection_like::ConnectionLike, Executor, Stream, Transaction, TransactionBuilder};
 use crate::{
     builder::ConnectionBuilder,
     codec::{
@@ -21,6 +21,7 @@ use crate::{
     },
     errors::Error,
     transport::DispatcherSender,
+    Result,
 };
 
 #[derive(Clone)]
@@ -62,21 +63,13 @@ impl Connection {
         }
     }
 
-    pub(crate) async fn send_encoded_request(&self, request: Request) -> Result<Value, Error> {
-        let resp = self.inner.dispatcher_sender.send(request).await?;
-        match resp.body {
-            ResponseBody::Ok(x) => Ok(x),
-            ResponseBody::Error(x) => Err(x.into()),
-        }
-    }
-
-    pub(crate) fn send_request(
+    pub(crate) fn encode_and_send_request(
         &self,
         body: impl RequestBody,
         stream_id: Option<u32>,
-    ) -> impl Future<Output = Result<Value, Error>> + Send + '_ {
+    ) -> BoxFuture<Result<Value>> {
         let req = Request::new(body, stream_id);
-        async { self.send_encoded_request(req?).await }
+        Box::pin(async move { self.send_request(req?).await })
     }
 
     /// Synchronously send request to channel and drop response.
@@ -91,7 +84,7 @@ impl Connection {
         let _ = self.inner.async_rt_handle.spawn(async move {
             let res = futures::future::ready(req)
                 .err_into()
-                .and_then(|x| this.send_encoded_request(x))
+                .and_then(|x| this.send_request(x))
                 .await;
             debug!("Response for background request: {:?}", res);
         });
@@ -99,18 +92,18 @@ impl Connection {
 
     // TODO: maybe other Ordering??
     pub(crate) fn next_stream_id(&self) -> u32 {
-        let next = self.inner.next_stream_id.fetch_add(1, Ordering::SeqCst);
+        let next = self.inner.next_stream_id.fetch_add(1, Ordering::Relaxed);
         if next != 0 {
             next
         } else {
-            self.inner.next_stream_id.fetch_add(1, Ordering::SeqCst)
+            self.inner.next_stream_id.fetch_add(1, Ordering::Relaxed)
         }
     }
 
     // TODO: return response from server
     /// Send ID request ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#iproto-id-0x49)).
-    pub(crate) async fn id(&self, features: Id) -> Result<(), Error> {
-        self.send_request(features, None).await.map(drop)
+    pub(crate) async fn id(&self, features: Id) -> Result<()> {
+        self.encode_and_send_request(features, None).await.map(drop)
     }
 
     pub(crate) fn stream(&self) -> Stream {
@@ -127,15 +120,29 @@ impl Connection {
     }
 
     /// Create transaction.
-    pub(crate) async fn transaction(&self) -> Result<Transaction, Error> {
+    pub(crate) async fn transaction(&self) -> Result<Transaction> {
         self.transaction_builder().begin().await
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
+impl Executor for Connection {
+    async fn send_request(&self, request: Request) -> Result<Value> {
+        let resp = self.inner.dispatcher_sender.send(request).await?;
+        match resp.body {
+            ResponseBody::Ok(x) => Ok(x),
+            ResponseBody::Error(x) => Err(x.into()),
+        }
+    }
+}
+
+#[async_trait]
 impl ConnectionLike for Connection {
-    async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error> {
-        self.send_request(body, None).await
+    fn send_any_request<R>(&self, body: R) -> BoxFuture<Result<Value>>
+    where
+        R: RequestBody,
+    {
+        self.encode_and_send_request(body, None)
     }
 
     fn stream(&self) -> Stream {
@@ -146,7 +153,7 @@ impl ConnectionLike for Connection {
         self.transaction_builder()
     }
 
-    async fn transaction(&self) -> Result<Transaction, Error> {
+    async fn transaction(&self) -> Result<Transaction> {
         self.transaction().await
     }
 }

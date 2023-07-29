@@ -1,26 +1,30 @@
 use std::borrow::Cow;
 
 use async_trait::async_trait;
+use futures::future::BoxFuture;
 use rmpv::Value;
 use serde::de::DeserializeOwned;
 
-use super::{Stream, Transaction, TransactionBuilder};
+use super::{Executor, Stream, Transaction, TransactionBuilder};
 use crate::{
     codec::{
         request::{Call, Delete, Eval, Insert, Ping, Replace, RequestBody, Select, Update, Upsert},
         utils::deserialize_non_sql_response,
     },
     errors::Error,
-    IteratorType,
+    IteratorType, Result,
 };
 
-#[async_trait(?Send)]
-pub trait ConnectionLike: private::Sealed {
+#[async_trait]
+pub trait ConnectionLike: Executor {
     /// Send request, receiving raw response body.
     ///
     /// It is not recommended to use this method directly, since some requests
     /// should be only sent in specific situations and might break connection.
-    async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error>;
+    #[deprecated = "This method will be removed in future"]
+    fn send_any_request<R>(&self, body: R) -> BoxFuture<Result<Value>>
+    where
+        R: RequestBody;
 
     /// Get new [`Stream`].
     ///
@@ -36,30 +40,32 @@ pub trait ConnectionLike: private::Sealed {
     /// Create [`Transaction`] with parameters from builder.
     ///
     /// It is safe to create `Transaction` from any type, implementing current trait.
-    async fn transaction(&self) -> Result<Transaction, Error>;
+    async fn transaction(&self) -> Result<Transaction>;
 
     /// Send PING request ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#iproto-ping-0x40)).
-    async fn ping(&self) -> Result<(), Error> {
-        self.send_request(Ping {}).await.map(drop)
+    async fn ping(&self) -> Result<()> {
+        self.send_any_request(Ping {}).await.map(drop)
     }
 
     // TODO: docs
-    async fn eval<I, T>(&self, expr: I, args: Vec<Value>) -> Result<T, Error>
+    async fn eval<I, T>(&self, expr: I, args: Vec<Value>) -> Result<T>
     where
         I: Into<Cow<'static, str>> + Send,
         T: DeserializeOwned,
     {
-        let body = self.send_request(Eval::new(expr, args)).await?;
+        let body = self.send_any_request(Eval::new(expr, args)).await?;
         deserialize_non_sql_response(body).map_err(Into::into)
     }
 
     // TODO: docs
-    async fn call<I, T>(&self, function_name: I, args: Vec<Value>) -> Result<T, Error>
+    async fn call<I, T>(&self, function_name: I, args: Vec<Value>) -> Result<T>
     where
         I: Into<Cow<'static, str>> + Send,
         T: DeserializeOwned,
     {
-        let body = self.send_request(Call::new(function_name, args)).await?;
+        let body = self
+            .send_any_request(Call::new(function_name, args))
+            .await?;
         deserialize_non_sql_response(body).map_err(Into::into)
     }
 
@@ -72,12 +78,12 @@ pub trait ConnectionLike: private::Sealed {
         offset: Option<u32>,
         iterator: Option<IteratorType>,
         keys: Vec<Value>,
-    ) -> Result<Vec<T>, Error>
+    ) -> Result<Vec<T>>
     where
         T: DeserializeOwned,
     {
         let body = self
-            .send_request(Select::new(
+            .send_any_request(Select::new(
                 space_id, index_id, limit, offset, iterator, keys,
             ))
             .await?;
@@ -86,8 +92,8 @@ pub trait ConnectionLike: private::Sealed {
 
     // TODO: docs
     // TODO: decode response
-    async fn insert(&self, space_id: u32, tuple: Vec<Value>) -> Result<(), Error> {
-        let _ = self.send_request(Insert::new(space_id, tuple)).await?;
+    async fn insert(&self, space_id: u32, tuple: Vec<Value>) -> Result<()> {
+        let _ = self.send_any_request(Insert::new(space_id, tuple)).await?;
         Ok(())
     }
 
@@ -100,9 +106,9 @@ pub trait ConnectionLike: private::Sealed {
         index_base: Option<u32>,
         keys: Vec<Value>,
         tuple: Vec<Value>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let _ = self
-            .send_request(Update::new(space_id, index_id, index_base, keys, tuple))
+            .send_any_request(Update::new(space_id, index_id, index_base, keys, tuple))
             .await?;
         Ok(())
     }
@@ -116,34 +122,37 @@ pub trait ConnectionLike: private::Sealed {
         index_base: u32,
         ops: Vec<Value>,
         tuple: Vec<Value>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let _ = self
-            .send_request(Upsert::new(space_id, index_base, ops, tuple))
+            .send_any_request(Upsert::new(space_id, index_base, ops, tuple))
             .await?;
         Ok(())
     }
 
     // TODO: structured tuple
     // TODO: decode response
-    async fn replace(&self, space_id: u32, keys: Vec<Value>) -> Result<(), Error> {
-        let _ = self.send_request(Replace::new(space_id, keys)).await?;
+    async fn replace(&self, space_id: u32, keys: Vec<Value>) -> Result<()> {
+        let _ = self.send_any_request(Replace::new(space_id, keys)).await?;
         Ok(())
     }
 
     // TODO: structured tuple
     // TODO: decode response
-    async fn delete(&self, space_id: u32, index_id: u32, keys: Vec<Value>) -> Result<(), Error> {
+    async fn delete(&self, space_id: u32, index_id: u32, keys: Vec<Value>) -> Result<()> {
         let _ = self
-            .send_request(Delete::new(space_id, index_id, keys))
+            .send_any_request(Delete::new(space_id, index_id, keys))
             .await?;
         Ok(())
     }
 }
 
-#[async_trait(?Send)]
-impl<C: ConnectionLike + private::Sealed + Sync> ConnectionLike for &C {
-    async fn send_request(&self, body: impl RequestBody) -> Result<Value, Error> {
-        (*self).send_request(body).await
+#[async_trait]
+impl<C: ConnectionLike + super::private::Sealed + Sync> ConnectionLike for &C {
+    fn send_any_request<R>(&self, body: R) -> BoxFuture<Result<Value>>
+    where
+        R: RequestBody,
+    {
+        (*self).send_any_request(body)
     }
 
     fn stream(&self) -> Stream {
@@ -154,20 +163,7 @@ impl<C: ConnectionLike + private::Sealed + Sync> ConnectionLike for &C {
         (*self).transaction_builder()
     }
 
-    async fn transaction(&self) -> Result<Transaction, Error> {
+    async fn transaction(&self) -> Result<Transaction> {
         (*self).transaction().await
     }
-}
-
-mod private {
-    use crate::client::{Connection, Stream, Transaction};
-
-    #[doc(hidden)]
-    pub trait Sealed {}
-
-    impl Sealed for Connection {}
-    impl Sealed for Stream {}
-    impl Sealed for Transaction {}
-    impl<S: Sealed> Sealed for &S {}
-    impl<S: Sealed> Sealed for &mut S {}
 }
