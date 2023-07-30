@@ -5,7 +5,7 @@ use crate::{
     errors::EncodingError,
 };
 
-use super::{RequestBody, PROTOCOL_VERSION};
+use super::{Request, PROTOCOL_VERSION};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Id {
@@ -35,7 +35,7 @@ impl Id {
     const WATCHERS: u8 = 3;
 }
 
-impl RequestBody for Id {
+impl Request for Id {
     fn request_type() -> RequestType
     where
         Self: Sized,

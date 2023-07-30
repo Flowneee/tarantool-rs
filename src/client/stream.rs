@@ -1,11 +1,10 @@
 use async_trait::async_trait;
-use futures::future::BoxFuture;
+
 use rmpv::Value;
 
-use super::{Connection, ConnectionLike, Transaction, TransactionBuilder};
+use super::{Connection, Transaction, TransactionBuilder};
 use crate::{
-    codec::request::{Request, RequestBody},
-    errors::Error,
+    codec::request::{EncodedRequest},
     Executor, Result,
 };
 
@@ -16,7 +15,7 @@ use crate::{
 /// # Example
 ///
 /// ```rust,compile
-/// use tarantool_rs::{Connection, ConnectionLike};
+/// use tarantool_rs::{Connection, ConnectionLike, Executor};
 /// # use futures::FutureExt;
 /// # use rmpv::Value;
 ///
@@ -60,19 +59,9 @@ impl Stream {
 
 #[async_trait]
 impl Executor for Stream {
-    async fn send_request(&self, request: Request) -> Result<Value> {
-        self.conn.send_request(request).await
-    }
-}
-
-#[async_trait]
-impl ConnectionLike for Stream {
-    fn send_any_request<R>(&self, body: R) -> BoxFuture<Result<Value>>
-    where
-        R: RequestBody,
-    {
-        self.conn
-            .encode_and_send_request(body, Some(self.stream_id))
+    async fn send_encoded_request(&self, mut request: EncodedRequest) -> Result<Value> {
+        request.stream_id = Some(self.stream_id);
+        self.conn.send_encoded_request(request).await
     }
 
     fn stream(&self) -> Stream {

@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
- - `Executor` trait, which sends encoded request.
+ - `Executor` trait, which sends encoded request;
+ - `.stream()`, `.transaction()` and `.transaction_builder()` methods moved to `Executor` trait;
+ - `Request` struct renamed to `EncodedRequest`;
+ - `RequestBody` trait renamed to `Request`.
  
 ### Changed
  - `ConnectionLike` now `Send` and `Sync`.

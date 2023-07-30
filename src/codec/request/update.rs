@@ -12,7 +12,7 @@ use crate::{
     errors::EncodingError,
 };
 
-use super::RequestBody;
+use super::Request;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Update {
@@ -41,7 +41,7 @@ impl Update {
     }
 }
 
-impl RequestBody for Update {
+impl Request for Update {
     fn request_type() -> RequestType
     where
         Self: Sized,

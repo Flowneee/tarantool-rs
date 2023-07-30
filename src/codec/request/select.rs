@@ -10,7 +10,7 @@ use crate::{
     errors::EncodingError,
 };
 
-use super::RequestBody;
+use super::Request;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Select {
@@ -42,7 +42,7 @@ impl Select {
     }
 }
 
-impl RequestBody for Select {
+impl Request for Select {
     fn request_type() -> RequestType
     where
         Self: Sized,

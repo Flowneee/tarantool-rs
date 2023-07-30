@@ -10,20 +10,20 @@ use tracing::{debug, error};
 
 use super::connection::Connection;
 use crate::{
-    codec::{request::Request, response::Response},
+    codec::{request::EncodedRequest, response::Response},
     Error, ReconnectInterval,
 };
 
 // Arc here is necessary to send same error to all waiting in-flights
 pub(crate) type DispatcherResponse = Result<Response, Error>;
-pub(crate) type DispatcherRequest = (Request, oneshot::Sender<DispatcherResponse>);
+pub(crate) type DispatcherRequest = (EncodedRequest, oneshot::Sender<DispatcherResponse>);
 
 pub(crate) struct DispatcherSender {
     tx: mpsc::Sender<DispatcherRequest>,
 }
 
 impl DispatcherSender {
-    pub(crate) async fn send(&self, request: Request) -> DispatcherResponse {
+    pub(crate) async fn send(&self, request: EncodedRequest) -> DispatcherResponse {
         let (tx, rx) = oneshot::channel();
         self.tx
             .send((request, tx))

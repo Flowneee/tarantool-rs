@@ -7,7 +7,7 @@ use crate::{
     errors::EncodingError,
 };
 
-use super::RequestBody;
+use super::Request;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Begin {
@@ -15,7 +15,7 @@ pub(crate) struct Begin {
     pub transaction_isolation_level: TransactionIsolationLevel,
 }
 
-impl RequestBody for Begin {
+impl Request for Begin {
     fn request_type() -> RequestType
     where
         Self: Sized,

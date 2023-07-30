@@ -7,19 +7,18 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::{future::BoxFuture, Future, TryFutureExt};
+use futures::{future::BoxFuture, TryFutureExt};
 use rmpv::Value;
 use tracing::debug;
 
-use super::{connection_like::ConnectionLike, Executor, Stream, Transaction, TransactionBuilder};
+use super::{Executor, Stream, Transaction, TransactionBuilder};
 use crate::{
     builder::ConnectionBuilder,
     codec::{
         consts::TransactionIsolationLevel,
-        request::{Id, Request, RequestBody},
+        request::{EncodedRequest, Id, Request},
         response::ResponseBody,
     },
-    errors::Error,
     transport::DispatcherSender,
     Result,
 };
@@ -65,26 +64,22 @@ impl Connection {
 
     pub(crate) fn encode_and_send_request(
         &self,
-        body: impl RequestBody,
+        body: impl Request,
         stream_id: Option<u32>,
     ) -> BoxFuture<Result<Value>> {
-        let req = Request::new(body, stream_id);
-        Box::pin(async move { self.send_request(req?).await })
+        let req = EncodedRequest::new(body, stream_id);
+        Box::pin(async move { self.send_encoded_request(req?).await })
     }
 
     /// Synchronously send request to channel and drop response.
     #[allow(clippy::let_underscore_future)]
-    pub(crate) fn send_request_sync_and_forget(
-        &self,
-        body: impl RequestBody,
-        stream_id: Option<u32>,
-    ) {
+    pub(crate) fn send_request_sync_and_forget(&self, body: impl Request, stream_id: Option<u32>) {
         let this = self.clone();
-        let req = Request::new(body, stream_id);
+        let req = EncodedRequest::new(body, stream_id);
         let _ = self.inner.async_rt_handle.spawn(async move {
             let res = futures::future::ready(req)
                 .err_into()
-                .and_then(|x| this.send_request(x))
+                .and_then(|x| this.send_encoded_request(x))
                 .await;
             debug!("Response for background request: {:?}", res);
         });
@@ -127,22 +122,12 @@ impl Connection {
 
 #[async_trait]
 impl Executor for Connection {
-    async fn send_request(&self, request: Request) -> Result<Value> {
+    async fn send_encoded_request(&self, request: EncodedRequest) -> Result<Value> {
         let resp = self.inner.dispatcher_sender.send(request).await?;
         match resp.body {
             ResponseBody::Ok(x) => Ok(x),
             ResponseBody::Error(x) => Err(x.into()),
         }
-    }
-}
-
-#[async_trait]
-impl ConnectionLike for Connection {
-    fn send_any_request<R>(&self, body: R) -> BoxFuture<Result<Value>>
-    where
-        R: RequestBody,
-    {
-        self.encode_and_send_request(body, None)
     }
 
     fn stream(&self) -> Stream {

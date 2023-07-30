@@ -12,7 +12,7 @@ use crate::{
     errors::EncodingError,
 };
 
-use super::RequestBody;
+use super::Request;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Call {
@@ -20,7 +20,7 @@ pub(crate) struct Call {
     pub tuple: Vec<Value>,
 }
 
-impl RequestBody for Call {
+impl Request for Call {
     fn request_type() -> RequestType
     where
         Self: Sized,

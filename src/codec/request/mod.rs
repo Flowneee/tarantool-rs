@@ -33,7 +33,7 @@ pub const PROTOCOL_VERSION: u8 = 3;
 const DEFAULT_ENCODE_BUFFER_SIZE: usize = 128;
 
 // TODO: docs
-pub trait RequestBody {
+pub trait Request {
     /// Return type of this request.
     fn request_type() -> RequestType
     where
@@ -49,8 +49,9 @@ pub trait RequestBody {
     fn encode(&self, buf: &mut dyn Write) -> Result<(), EncodingError>;
 }
 
+/// Request, encoded into MessagePack, and its meta data.
 #[doc(hidden)]
-pub struct Request {
+pub struct EncodedRequest {
     /// By default `sync` is set to 0 and replaced with
     /// actual value when reaching [`crate::transport::Connection`].
     pub(crate) request_type: RequestType,
@@ -60,11 +61,8 @@ pub struct Request {
     pub(crate) encoded_body: Bytes,
 }
 
-impl Request {
-    pub fn new<Body: RequestBody>(
-        body: Body,
-        stream_id: Option<u32>,
-    ) -> Result<Self, EncodingError> {
+impl EncodedRequest {
+    pub fn new<Body: Request>(body: Body, stream_id: Option<u32>) -> Result<Self, EncodingError> {
         let mut buf = BytesMut::with_capacity(DEFAULT_ENCODE_BUFFER_SIZE).writer();
         body.encode(&mut buf)?;
         Ok(Self {

@@ -10,7 +10,7 @@ use crate::{
     errors::EncodingError,
 };
 
-use super::RequestBody;
+use super::Request;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Delete {
@@ -29,7 +29,7 @@ impl Delete {
     }
 }
 
-impl RequestBody for Delete {
+impl Request for Delete {
     fn request_type() -> RequestType
     where
         Self: Sized,

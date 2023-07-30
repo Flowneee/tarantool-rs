@@ -5,7 +5,7 @@ use rmp::Marker;
 use tokio_util::codec::{Decoder, Encoder};
 use tracing::trace;
 
-use self::{request::Request, response::Response};
+use self::{request::EncodedRequest, response::Response};
 use crate::{
     errors::{CodecDecodeError, CodecEncodeError, DecodingError},
     Error,
@@ -123,13 +123,13 @@ impl Decoder for ClientCodec {
     }
 }
 
-impl Encoder<Request> for ClientCodec {
+impl Encoder<EncodedRequest> for ClientCodec {
     type Error = CodecEncodeError;
 
     // To omit creating intermediate BytesMut, encode message with 0 as length,
     // and after encoding calculate size of the encoded messages and overwrite
     // length field (0) with new data.
-    fn encode(&mut self, item: Request, dst: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: EncodedRequest, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let begin_idx = dst.len();
 
         // TODO: calculate necessary integer type instead of using u64 always

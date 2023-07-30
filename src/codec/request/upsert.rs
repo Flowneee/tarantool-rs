@@ -12,7 +12,7 @@ use crate::{
     errors::EncodingError,
 };
 
-use super::RequestBody;
+use super::Request;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Upsert {
@@ -33,7 +33,7 @@ impl Upsert {
     }
 }
 
-impl RequestBody for Upsert {
+impl Request for Upsert {
     fn request_type() -> RequestType
     where
         Self: Sized,

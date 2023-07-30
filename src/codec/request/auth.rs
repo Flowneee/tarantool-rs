@@ -4,7 +4,7 @@ use std::{cmp::min, io::Write};
 
 use sha1::{Digest, Sha1};
 
-use super::RequestBody;
+use super::Request;
 use crate::{
     codec::{
         consts::{keys, RequestType},
@@ -28,7 +28,7 @@ impl<'a> Auth<'a> {
     }
 }
 
-impl<'a> RequestBody for Auth<'a> {
+impl<'a> Request for Auth<'a> {
     fn request_type() -> RequestType
     where
         Self: Sized,

@@ -1,3 +1,4 @@
+use tarantool_rs::Executor;
 use tarantool_rs::{Connection, ConnectionLike, Value};
 
 #[tokio::main]

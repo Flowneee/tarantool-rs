@@ -1,12 +1,12 @@
 use std::io::Write;
 
-use super::RequestBody;
+use super::Request;
 use crate::{codec::consts::RequestType, errors::EncodingError};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Ping {}
 
-impl RequestBody for Ping {
+impl Request for Ping {
     fn request_type() -> RequestType {
         RequestType::Ping
     }

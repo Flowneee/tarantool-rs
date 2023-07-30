@@ -12,7 +12,7 @@ use crate::{
     errors::EncodingError,
 };
 
-use super::RequestBody;
+use super::Request;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Insert {
@@ -26,7 +26,7 @@ impl Insert {
     }
 }
 
-impl RequestBody for Insert {
+impl Request for Insert {
     fn request_type() -> RequestType
     where
         Self: Sized,

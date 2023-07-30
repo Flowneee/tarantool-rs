@@ -12,7 +12,7 @@ use crate::{
     errors::EncodingError,
 };
 
-use super::RequestBody;
+use super::Request;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Replace {
@@ -26,7 +26,7 @@ impl Replace {
     }
 }
 
-impl RequestBody for Replace {
+impl Request for Replace {
     fn request_type() -> RequestType
     where
         Self: Sized,

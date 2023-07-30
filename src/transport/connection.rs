@@ -17,7 +17,7 @@ use tracing::{debug, trace, warn};
 use super::dispatcher::DispatcherResponse;
 use crate::{
     codec::{
-        request::{Auth, Request},
+        request::{Auth, EncodedRequest},
         response::{Response, ResponseBody},
         ClientCodec, Greeting,
     },
@@ -82,7 +82,7 @@ impl Connection {
     }
 
     async fn auth(&mut self, user: &str, password: Option<&str>, salt: &[u8]) -> Result<(), Error> {
-        let mut request = Request::new(Auth::new(user, password, salt), None).unwrap();
+        let mut request = EncodedRequest::new(Auth::new(user, password, salt), None).unwrap();
         *request.sync_mut() = self.next_sync();
 
         trace!("Sending auth request");
@@ -102,7 +102,7 @@ impl Connection {
 
     pub(super) async fn send_request(
         &mut self,
-        mut request: Request,
+        mut request: EncodedRequest,
         tx: oneshot::Sender<DispatcherResponse>,
     ) -> Result<(), tokio::io::Error> {
         let sync = self.next_sync();

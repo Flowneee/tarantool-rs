@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use futures::future::BoxFuture;
+
 use rmpv::Value;
 use tracing::debug;
 
@@ -9,9 +9,8 @@ use super::{Connection, ConnectionLike, Stream};
 use crate::{
     codec::{
         consts::TransactionIsolationLevel,
-        request::{Begin, Commit, Request, RequestBody, Rollback},
+        request::{Begin, Commit, EncodedRequest, Rollback},
     },
-    errors::Error,
     Executor, Result,
 };
 
@@ -49,7 +48,7 @@ impl Transaction {
         timeout_secs: Option<f64>,
     ) -> Result<()> {
         debug!("Beginning tranasction on stream {}", self.stream_id);
-        self.send_any_request(Begin::new(timeout_secs, transaction_isolation_level))
+        self.send_request(Begin::new(timeout_secs, transaction_isolation_level))
             .await
             .map(drop)
     }
@@ -58,7 +57,7 @@ impl Transaction {
     pub async fn commit(mut self) -> Result<()> {
         if !self.finished {
             debug!("Commiting tranasction on stream {}", self.stream_id);
-            let _ = self.send_any_request(Commit::default()).await?;
+            let _ = self.send_request(Commit::default()).await?;
             self.finished = true;
         }
         Ok(())
@@ -68,7 +67,7 @@ impl Transaction {
     pub async fn rollback(mut self) -> Result<()> {
         if !self.finished {
             debug!("Rolling back tranasction on stream {}", self.stream_id);
-            let _ = self.send_any_request(Rollback::default()).await?;
+            let _ = self.send_request(Rollback::default()).await?;
             self.finished = true;
         }
         Ok(())
@@ -91,19 +90,9 @@ impl Drop for Transaction {
 
 #[async_trait]
 impl Executor for Transaction {
-    async fn send_request(&self, request: Request) -> Result<Value> {
-        self.conn.send_request(request).await
-    }
-}
-
-#[async_trait]
-impl ConnectionLike for Transaction {
-    fn send_any_request<R>(&self, body: R) -> BoxFuture<Result<Value>>
-    where
-        R: RequestBody,
-    {
-        self.conn
-            .encode_and_send_request(body, Some(self.stream_id))
+    async fn send_encoded_request(&self, mut request: EncodedRequest) -> Result<Value> {
+        request.stream_id = Some(self.stream_id);
+        self.conn.send_encoded_request(request).await
     }
 
     // TODO: do we need to repeat this in all ConnetionLike implementations?

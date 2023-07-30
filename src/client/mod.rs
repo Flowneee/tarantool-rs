@@ -23,6 +23,6 @@ mod private {
     impl Sealed for Connection {}
     impl Sealed for Stream {}
     impl Sealed for Transaction {}
-    impl<S: Sealed> Sealed for &S {}
-    impl<S: Sealed> Sealed for &mut S {}
+    impl<S: Sealed + ?Sized> Sealed for &S {}
+    impl<S: Sealed + ?Sized> Sealed for &mut S {}
 }

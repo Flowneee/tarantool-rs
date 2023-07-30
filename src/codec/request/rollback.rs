@@ -4,12 +4,12 @@ use std::io::Write;
 
 use crate::{codec::consts::RequestType, errors::EncodingError};
 
-use super::RequestBody;
+use super::Request;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Rollback {}
 
-impl RequestBody for Rollback {
+impl Request for Rollback {
     fn request_type() -> RequestType
     where
         Self: Sized,
