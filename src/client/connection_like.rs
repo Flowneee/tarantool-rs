@@ -14,7 +14,6 @@ use crate::{
         },
         utils::deserialize_non_sql_response,
     },
-    schema::Space,
     IteratorType, Result,
 };
 

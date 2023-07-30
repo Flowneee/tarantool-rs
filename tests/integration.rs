@@ -3,7 +3,7 @@ extern crate rental;
 
 use assert_matches::assert_matches;
 use serde::Deserialize;
-use tarantool_rs::{errors::Error, schema::SpaceMetadata, Connection, ConnectionLike};
+use tarantool_rs::{errors::Error, Connection, ConnectionLike};
 
 use crate::common::TarantoolTestContainer;
 
@@ -83,13 +83,17 @@ async fn retrieve_schema() -> Result<(), anyhow::Error> {
 
     let conn = container.create_conn().await?;
     let space = conn
-        .load_by_name("ds9_crew")
+        .find_space_by_name("ds9_crew")
         .await?
         .expect("Space 'ds9_crew' found");
-    assert_eq!(space.id(), 512, "First user space expected to have id 512");
-    assert_eq!(space.name(), "ds9_crew");
+    assert_eq!(
+        space.metadata().id(),
+        512,
+        "First user space expected to have id 512"
+    );
+    assert_eq!(space.metadata().name(), "ds9_crew");
 
-    assert_eq!(space.indices().len(), 3);
+    assert_eq!(space.metadata().indices().len(), 3);
     let primary_idx = space
         .metadata()
         .indices()
@@ -107,14 +111,18 @@ async fn select_all() -> Result<(), anyhow::Error> {
     let container = TarantoolTestContainer::default();
 
     let conn: Connection = container.create_conn().await?;
-    let space = SpaceMetadata::load_by_name(&conn, "ds9_crew")
+    let space = conn
+        .find_space_by_name("ds9_crew")
         .await?
         .expect("Space 'ds9_crew' found");
-    let primary_idx = space.indices().get_by_id(0).expect("Primary index present");
+    let primary_idx = space
+        .metadata()
+        .indices()
+        .get_by_id(0)
+        .expect("Primary index present");
 
-    let members: Vec<CrewMember> = conn
+    let members: Vec<CrewMember> = space
         .select(
-            space.id(),
             primary_idx.id(),
             None,
             None,
@@ -141,14 +149,18 @@ async fn select_limits() -> Result<(), anyhow::Error> {
     let container = TarantoolTestContainer::default();
 
     let conn: Connection = container.create_conn().await?;
-    let space = SpaceMetadata::load_by_name(&conn, "ds9_crew")
+    let space = conn
+        .find_space_by_name("ds9_crew")
         .await?
         .expect("Space 'ds9_crew' found");
-    let primary_idx = space.indices().get_by_id(0).expect("Primary index present");
+    let primary_idx = space
+        .metadata()
+        .indices()
+        .get_by_id(0)
+        .expect("Primary index present");
 
-    let members: Vec<CrewMember> = conn
+    let members: Vec<CrewMember> = space
         .select(
-            space.id(),
             primary_idx.id(),
             Some(2),
             Some(2),
@@ -175,17 +187,18 @@ async fn select_by_key() -> Result<(), anyhow::Error> {
     let container = TarantoolTestContainer::default();
 
     let conn: Connection = container.create_conn().await?;
-    let space = SpaceMetadata::load_by_name(&conn, "ds9_crew")
+    let space = conn
+        .find_space_by_name("ds9_crew")
         .await?
         .expect("Space 'ds9_crew' found");
     let rank_idx = space
+        .metadata()
         .indices()
         .get_by_name("idx_rank")
         .expect("Rank index present");
 
-    let members: Vec<CrewMember> = conn
+    let members: Vec<CrewMember> = space
         .select(
-            space.id(),
             rank_idx.id(),
             None,
             None,
