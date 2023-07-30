@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## Unreleased
+### Fixed
+ - `.update()` request sends correct request type.
+
 ### Added
  - `Executor` trait, which sends encoded request;
  - `.stream()`, `.transaction()` and `.transaction_builder()` methods moved to `Executor` trait;

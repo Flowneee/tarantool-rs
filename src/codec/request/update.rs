@@ -12,7 +12,7 @@ use crate::{
     errors::EncodingError,
 };
 
-use super::Request;
+use super::{Request, INDEX_BASE_VALUE};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Update {
@@ -38,14 +38,15 @@ impl Request for Update {
     where
         Self: Sized,
     {
-        RequestType::Replace
+        RequestType::Update
     }
 
     // NOTE: `&mut buf: mut` is required since I don't get why compiler complain
     fn encode(&self, mut buf: &mut dyn Write) -> Result<(), EncodingError> {
-        rmp::encode::write_map_len(&mut buf, 4)?;
+        rmp::encode::write_map_len(&mut buf, 5)?;
         write_kv_u32(buf, keys::SPACE_ID, self.space_id)?;
         write_kv_u32(buf, keys::INDEX_ID, self.index_id)?;
+        write_kv_u32(buf, keys::INDEX_BASE, INDEX_BASE_VALUE)?;
         write_kv_array(buf, keys::KEY, &self.keys)?;
         write_kv_array(buf, keys::TUPLE, &self.tuple)?;
         Ok(())

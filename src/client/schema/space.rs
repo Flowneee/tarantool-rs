@@ -6,13 +6,10 @@ use serde::{de::DeserializeOwned, Deserialize};
 
 use super::{IndexMetadata, SystemSpacesId};
 use crate::{
-    client::ConnectionLike,
-    codec::request::{Insert, Select},
-    utils::UniqueIdNameMap,
-    Error, Executor, IteratorType, Result,
+    client::ConnectionLike, utils::UniqueIdNameMap, Error, Executor, IteratorType, Result,
 };
 
-/// Space metadata from with its indices metadata from [system views](https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_space/system_views/).
+/// Space metadata with its indices metadata from [system views](https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_space/system_views/).
 #[derive(Clone, Deserialize)]
 pub struct SpaceMetadata {
     id: u32,
@@ -73,9 +70,10 @@ impl SpaceMetadata {
             )
             .await?
             .into_iter()
-            .next() else {
-                return Ok(None)
-            };
+            .next()
+        else {
+            return Ok(None);
+        };
         this.load_indices(conn).await?;
         Ok(Some(this))
     }

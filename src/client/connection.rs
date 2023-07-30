@@ -1,5 +1,5 @@
-use std::fmt;
 use std::{
+    fmt,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc,

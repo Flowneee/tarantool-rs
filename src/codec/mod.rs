@@ -106,10 +106,12 @@ impl Decoder for ClientCodec {
     type Error = CodecDecodeError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        let Some(next_frame_length) = self.length_decoder
+        let Some(next_frame_length) = self
+            .length_decoder
             .decode(src)
-            .map_err(CodecDecodeError::Decode)? else {
-                return Ok(None);
+            .map_err(CodecDecodeError::Decode)?
+        else {
+            return Ok(None);
         };
         if src.len() >= next_frame_length {
             self.length_decoder.reset();
