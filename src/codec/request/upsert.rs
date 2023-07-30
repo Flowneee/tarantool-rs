@@ -12,21 +12,19 @@ use crate::{
     errors::EncodingError,
 };
 
-use super::Request;
+use super::{Request, INDEX_BASE_VALUE};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Upsert {
     pub space_id: u32,
-    pub index_base: u32,
     pub ops: Vec<Value>,
     pub tuple: Vec<Value>,
 }
 
 impl Upsert {
-    pub(crate) fn new(space_id: u32, index_base: u32, ops: Vec<Value>, tuple: Vec<Value>) -> Self {
+    pub(crate) fn new(space_id: u32, ops: Vec<Value>, tuple: Vec<Value>) -> Self {
         Self {
             space_id,
-            index_base,
             ops,
             tuple,
         }
@@ -46,7 +44,7 @@ impl Request for Upsert {
     fn encode(&self, mut buf: &mut dyn Write) -> Result<(), EncodingError> {
         rmp::encode::write_map_len(&mut buf, 4)?;
         write_kv_u32(buf, keys::SPACE_ID, self.space_id)?;
-        write_kv_u32(buf, keys::INDEX_BASE, self.index_base)?;
+        write_kv_u32(buf, keys::INDEX_BASE, INDEX_BASE_VALUE)?;
         write_kv_array(buf, keys::OPS, &self.ops)?;
         write_kv_array(buf, keys::TUPLE, &self.tuple)?;
         Ok(())

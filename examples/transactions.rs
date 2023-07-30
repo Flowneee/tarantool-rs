@@ -1,5 +1,4 @@
-use tarantool_rs::Executor;
-use tarantool_rs::{Connection, ConnectionLike, Value};
+use tarantool_rs::{Connection, ConnectionLike, Executor, Value};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {

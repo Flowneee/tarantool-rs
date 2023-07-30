@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use async_trait::async_trait;
 use rmpv::Value;
 
@@ -6,7 +8,7 @@ use crate::{codec::request::EncodedRequest, Result, Stream, Transaction, Transac
 
 // TODO: docs
 #[async_trait]
-pub trait Executor: Sealed + Send + Sync {
+pub trait Executor: Sealed + Send + Sync + Debug {
     /// Send encoded request.
     async fn send_encoded_request(&self, request: EncodedRequest) -> Result<Value>;
 
@@ -28,7 +30,7 @@ pub trait Executor: Sealed + Send + Sync {
 }
 
 #[async_trait]
-impl<E: Executor + Sealed + Sync> Executor for &E {
+impl<E: Executor + Sealed + Sync + Debug> Executor for &E {
     async fn send_encoded_request(&self, request: EncodedRequest) -> Result<Value> {
         (**self).send_encoded_request(request).await
     }
@@ -47,7 +49,7 @@ impl<E: Executor + Sealed + Sync> Executor for &E {
 }
 
 #[async_trait]
-impl<E: Executor + Sealed + Sync> Executor for &mut E {
+impl<E: Executor + Sealed + Sync + Debug> Executor for &mut E {
     async fn send_encoded_request(&self, request: EncodedRequest) -> Result<Value> {
         (**self).send_encoded_request(request).await
     }

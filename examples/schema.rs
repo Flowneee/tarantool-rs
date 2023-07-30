@@ -1,4 +1,4 @@
-use tarantool_rs::{schema::SpaceMetadata, Connection};
+use tarantool_rs::{schema::SpaceMetadata, Connection, IteratorType};
 use tracing::info;
 
 #[tokio::main]
@@ -7,8 +7,15 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let conn = Connection::builder().build("127.0.0.1:3301").await?;
 
-    let data = SpaceMetadata::load_by_name(conn, "clients").await?;
+    let data = conn.find_space_by_name("clients").await?;
     info!("{:?}", data);
-
+    let space = data.unwrap();
+    space.upsert(vec!["=".into()], vec![2.into()]).await?;
+    info!(
+        "{:?}",
+        space
+            .select::<(i64,)>(0, None, None, Some(IteratorType::All), vec![])
+            .await?
+    );
     Ok(())
 }

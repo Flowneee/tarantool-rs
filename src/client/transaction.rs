@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{fmt, time::Duration};
 
 use async_trait::async_trait;
 
@@ -106,6 +106,15 @@ impl Executor for Transaction {
 
     async fn transaction(&self) -> Result<Transaction> {
         self.conn.transaction().await
+    }
+}
+
+impl fmt::Debug for Transaction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Transaction")
+            .field("stream_id", &self.stream_id)
+            .field("finished", &self.finished)
+            .finish()
     }
 }
 

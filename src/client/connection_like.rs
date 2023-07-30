@@ -14,6 +14,7 @@ use crate::{
         },
         utils::deserialize_non_sql_response,
     },
+    schema::Space,
     IteratorType, Result,
 };
 
@@ -86,12 +87,11 @@ pub trait ConnectionLike: Executor {
         &self,
         space_id: u32,
         index_id: u32,
-        index_base: Option<u32>,
         keys: Vec<Value>,
         tuple: Vec<Value>,
     ) -> Result<()> {
         let _ = self
-            .send_request(Update::new(space_id, index_id, index_base, keys, tuple))
+            .send_request(Update::new(space_id, index_id, keys, tuple))
             .await?;
         Ok(())
     }
@@ -99,16 +99,8 @@ pub trait ConnectionLike: Executor {
     // TODO: structured tuple
     // TODO: decode response
     // TODO: maybe set index base to 1 always?
-    async fn upsert(
-        &self,
-        space_id: u32,
-        index_base: u32,
-        ops: Vec<Value>,
-        tuple: Vec<Value>,
-    ) -> Result<()> {
-        let _ = self
-            .send_request(Upsert::new(space_id, index_base, ops, tuple))
-            .await?;
+    async fn upsert(&self, space_id: u32, ops: Vec<Value>, tuple: Vec<Value>) -> Result<()> {
+        let _ = self.send_request(Upsert::new(space_id, ops, tuple)).await?;
         Ok(())
     }
 

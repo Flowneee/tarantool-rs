@@ -82,14 +82,19 @@ async fn retrieve_schema() -> Result<(), anyhow::Error> {
     let container = TarantoolTestContainer::default();
 
     let conn = container.create_conn().await?;
-    let space = SpaceMetadata::load_by_name(&conn, "ds9_crew")
+    let space = conn
+        .load_by_name("ds9_crew")
         .await?
         .expect("Space 'ds9_crew' found");
     assert_eq!(space.id(), 512, "First user space expected to have id 512");
     assert_eq!(space.name(), "ds9_crew");
 
     assert_eq!(space.indices().len(), 3);
-    let primary_idx = space.indices().get_by_id(0).expect("Primary index present");
+    let primary_idx = space
+        .metadata()
+        .indices()
+        .get_by_id(0)
+        .expect("Primary index present");
     assert_eq!(primary_idx.name(), "idx_id");
     assert_eq!(primary_idx.space_id(), 512);
     assert_eq!(primary_idx.id(), 0);

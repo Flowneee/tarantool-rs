@@ -1,3 +1,4 @@
+use std::fmt;
 use std::{
     sync::{
         atomic::{AtomicU32, Ordering},
@@ -19,6 +20,7 @@ use crate::{
         request::{EncodedRequest, Id, Request},
         response::ResponseBody,
     },
+    schema::Space,
     transport::DispatcherSender,
     Result,
 };
@@ -118,6 +120,16 @@ impl Connection {
     pub(crate) async fn transaction(&self) -> Result<Transaction> {
         self.transaction_builder().begin().await
     }
+
+    /// Find and load space by its id.
+    pub async fn find_space_by_id(&self, id: u32) -> Result<Option<Space<Self>>> {
+        Space::load_by_id(self.clone(), id).await
+    }
+
+    /// Find and load space by its name.
+    pub async fn find_space_by_name(&self, name: &str) -> Result<Option<Space<Self>>> {
+        Space::load_by_name(self.clone(), name).await
+    }
 }
 
 #[async_trait]
@@ -140,5 +152,11 @@ impl Executor for Connection {
 
     async fn transaction(&self) -> Result<Transaction> {
         self.transaction().await
+    }
+}
+
+impl fmt::Debug for Connection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Connection")
     }
 }

@@ -31,6 +31,7 @@ mod upsert;
 pub const PROTOCOL_VERSION: u8 = 3;
 
 const DEFAULT_ENCODE_BUFFER_SIZE: usize = 128;
+const INDEX_BASE_VALUE: u32 = 0;
 
 // TODO: docs
 pub trait Request {
