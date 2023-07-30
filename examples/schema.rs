@@ -17,16 +17,17 @@ async fn main() -> Result<(), anyhow::Error> {
             .select::<(i64, String)>(0, None, None, Some(IteratorType::All), vec![])
             .await?
     );
+    //space.insert(vec![3.into(), "John Doe".into()]).await?;
     space
-        .upsert(vec!["=".into()], vec![2.into(), "Second".into()])
+        .upsert(vec!["=".into()], vec![1.into(), "Second".into()])
         .await?;
     space
         .update(
             0,
-            vec![2.into()],
+            vec![0.into()],
             vec![Value::Array(vec![
                 "=".into(),
-                2.into(),
+                1.into(),
                 "Second (updated)".into(),
             ])],
         )

@@ -6,7 +6,20 @@
 
 `tarantool-rs` - asyncronous Tokio-based client for [Tarantool](https://www.tarantool.io).
 
-For examples of how to use this crate check `examples/` folder. 
+Documentation available on [docs.rs](https://docs.rs/tarantool-rs/latest).
+
+### Example
+
+If you have `clients` space with 2 "columns": `id` and `name`:
+
+``` rust
+let conn = Connection::builder().build("127.0.0.1:3301").await?;
+let space = conn.find_space_by_name("clients").await?.expect("clients space exists");
+space.insert(vec![1.into(), "John Doe".into()]).await?;
+let clients = space.select::<(i64, String)>(0, None, None, Some(IteratorType::All), vec![]).await?;
+```
+
+For more examples of how to use this crate check `examples/` folder. 
 
 ## Features
 
@@ -24,6 +37,7 @@ For examples of how to use this crate check `examples/` folder.
 * [ ] graceful shutdown protocol support
 * [ ] pre Tarantool 2.10 versions support
 * [ ] customizable connection features (streams/watchers/mvcc)
+* [ ] custom Tarantool MP types (UUID, ...)
 * [ ] ...
 
 
