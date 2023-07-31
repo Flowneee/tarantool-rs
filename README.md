@@ -14,9 +14,9 @@ If you have `clients` space with 2 "columns": `id` and `name`:
 
 ``` rust
 let conn = Connection::builder().build("127.0.0.1:3301").await?;
-let space = conn.find_space_by_name("clients").await?.expect("clients space exists");
+let space = conn.get_space("clients").await?.expect("clients space exists");
 space.insert(vec![1.into(), "John Doe".into()]).await?;
-let clients = space.select::<(i64, String)>(0, None, None, Some(IteratorType::All), vec![]).await?;
+let clients = space.select::<(i64, String)>(None, None, Some(IteratorType::All), vec![]).await?;
 ```
 
 For more examples of how to use this crate check `examples/` folder. 

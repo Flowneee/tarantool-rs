@@ -124,7 +124,7 @@ impl<E> Space<E> {
 
     pub fn index(&self, key: impl Into<SchemaEntityKey>) -> Option<Index<&E>> {
         self.get_index(key)
-            .map(|index| Index::new(&self.executor, &index, &self.metadata))
+            .map(|index| Index::new(&self.executor, index, &self.metadata))
     }
 }
 
@@ -167,7 +167,7 @@ impl<E: Executor> Space<E> {
         Ok(Some(Self {
             executor,
             metadata: space_metadata.into(),
-            primary_index_metadata: primary_index.into(),
+            primary_index_metadata: primary_index,
             indices_metadata: indices.into(),
         }))
     }
@@ -176,7 +176,7 @@ impl<E: Executor> Space<E> {
     pub fn indices(&self) -> impl Iterator<Item = Index<&E>> {
         self.indices_metadata
             .iter()
-            .map(|index| Index::new(&self.executor, &index, &self.metadata))
+            .map(|index| Index::new(&self.executor, index, &self.metadata))
     }
 
     /// Call `select` with primary index on current space.

@@ -64,9 +64,9 @@ impl From<u32> for SchemaEntityKey {
     }
 }
 
-impl Into<Value> for SchemaEntityKey {
-    fn into(self) -> Value {
-        match self {
+impl From<SchemaEntityKey> for Value {
+    fn from(val: SchemaEntityKey) -> Self {
+        match val {
             SchemaEntityKey::Name(x) => x.into(),
             SchemaEntityKey::Id(x) => x.into(),
         }
