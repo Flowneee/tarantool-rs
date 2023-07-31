@@ -1,5 +1,11 @@
-pub use self::{index::*, space::*};
+pub use self::{
+    index::{GenericIndex, Index, IndexMetadata, OwnedIndex},
+    space::{Space, SpaceMetadata},
+};
 
+use std::fmt;
+
+use rmpv::Value;
 use serde::{Deserialize, Serialize};
 
 mod index;
@@ -9,6 +15,9 @@ mod space;
 ///
 /// For details see [`SystemSpaceId`].
 pub const USER_SPACE_MIN_ID: u32 = 512;
+
+/// Id of the primary index in space.
+pub const PRIMARY_INDEX_ID: u32 = 0;
 
 // TODO: docs on variants
 /// Ids of system spaces and views.
@@ -23,4 +32,47 @@ pub enum SystemSpacesId {
     VIndex = 289,
 }
 
-pub struct SpacesMetadata {}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SchemaEntityKey {
+    Name(String),
+    Id(u32),
+}
+
+impl fmt::Display for SchemaEntityKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SchemaEntityKey::Name(x) => write!(f, "name '{x}'"),
+            SchemaEntityKey::Id(x) => write!(f, "id '{x}'"),
+        }
+    }
+}
+
+impl From<&str> for SchemaEntityKey {
+    fn from(value: &str) -> Self {
+        Self::Name(value.to_owned())
+    }
+}
+
+impl From<u32> for SchemaEntityKey {
+    fn from(value: u32) -> Self {
+        Self::Id(value)
+    }
+}
+
+impl Into<Value> for SchemaEntityKey {
+    fn into(self) -> Value {
+        match self {
+            SchemaEntityKey::Name(x) => x.into(),
+            SchemaEntityKey::Id(x) => x.into(),
+        }
+    }
+}
+
+impl SchemaEntityKey {
+    pub(crate) fn space_index_id(&self) -> u32 {
+        match self {
+            SchemaEntityKey::Name(_) => 2,
+            SchemaEntityKey::Id(_) => 0,
+        }
+    }
+}

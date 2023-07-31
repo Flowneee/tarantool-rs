@@ -8,22 +8,20 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let conn = Connection::builder().build("127.0.0.1:3301").await?;
 
-    let data = conn.find_space_by_name("clients").await?;
+    let data = conn.get_space("clients").await?;
     info!("{:?}", data);
     let space = data.unwrap();
     info!(
         "Pre: {:?}",
         space
-            .select::<(i64, String)>(0, None, None, Some(IteratorType::All), vec![])
+            .select::<(i64, String)>(None, None, Some(IteratorType::All), vec![])
             .await?
     );
-    //space.insert(vec![3.into(), "John Doe".into()]).await?;
     space
         .upsert(vec!["=".into()], vec![1.into(), "Second".into()])
         .await?;
     space
         .update(
-            0,
             vec![0.into()],
             vec![Value::Array(vec![
                 "=".into(),
@@ -35,7 +33,9 @@ async fn main() -> Result<(), anyhow::Error> {
     info!(
         "Post: {:?}",
         space
-            .select::<(i64, String)>(0, None, None, Some(IteratorType::All), vec![])
+            .index(1)
+            .expect("Index with id 1 exists")
+            .select::<(i64, String)>(None, None, Some(IteratorType::All), vec![])
             .await?
     );
     Ok(())

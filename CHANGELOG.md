@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+### Added
+ - `Index` API, which simplify making `select` and CRUD requsts on specific index.
+
+### Changed
+ - Few renames.
+
+### Removed
+ - `Error::MetadataLoad` variant;
+ - `IndexMetadata` from `SpaceMetadata`;
+ - Public methods for loading metadata.
+
+
 ## [0.0.3] - 2023-07-30
 ### Fixed
  - `.update()` request sends correct request type.
@@ -13,13 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - `Executor` trait, which sends encoded request;
  - `.stream()`, `.transaction()` and `.transaction_builder()` methods moved to `Executor` trait;
  - `Request` struct renamed to `EncodedRequest`;
- - `RequestBody` trait renamed to `Request`.
+ - `RequestBody` trait renamed to `Request`;
+ - `Space` API, which simplify making `select` and CRUD requsts on specific space.
  
 ### Changed
  - `ConnectionLike` now `Send` and `Sync`.
 
 
-## [0.0.3] - 2023-05-18
+## [0.0.2] - 2023-05-18
 ### Added
  - `indices` method to `SpaceMetadata` for accessing space's indices;
  - `get_by_name` and `get_by_id` methods to `UniqueIdNameMap`;

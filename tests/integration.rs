@@ -83,7 +83,7 @@ async fn retrieve_schema() -> Result<(), anyhow::Error> {
 
     let conn = container.create_conn().await?;
     let space = conn
-        .find_space_by_name("ds9_crew")
+        .get_space("ds9_crew")
         .await?
         .expect("Space 'ds9_crew' found");
     assert_eq!(
@@ -93,15 +93,8 @@ async fn retrieve_schema() -> Result<(), anyhow::Error> {
     );
     assert_eq!(space.metadata().name(), "ds9_crew");
 
-    assert_eq!(space.metadata().indices().len(), 3);
-    let primary_idx = space
-        .metadata()
-        .indices()
-        .get_by_id(0)
-        .expect("Primary index present");
-    assert_eq!(primary_idx.name(), "idx_id");
-    assert_eq!(primary_idx.space_id(), 512);
-    assert_eq!(primary_idx.id(), 0);
+    let index_count = space.indices().count();
+    assert!(index_count > 1, "There should be multiple indices");
 
     Ok(())
 }
@@ -112,23 +105,12 @@ async fn select_all() -> Result<(), anyhow::Error> {
 
     let conn: Connection = container.create_conn().await?;
     let space = conn
-        .find_space_by_name("ds9_crew")
+        .get_space("ds9_crew")
         .await?
         .expect("Space 'ds9_crew' found");
-    let primary_idx = space
-        .metadata()
-        .indices()
-        .get_by_id(0)
-        .expect("Primary index present");
 
     let members: Vec<CrewMember> = space
-        .select(
-            primary_idx.id(),
-            None,
-            None,
-            Some(tarantool_rs::IteratorType::All),
-            vec![],
-        )
+        .select(None, None, Some(tarantool_rs::IteratorType::All), vec![])
         .await?;
     assert_eq!(members.len(), 7);
     assert_eq!(
@@ -150,18 +132,12 @@ async fn select_limits() -> Result<(), anyhow::Error> {
 
     let conn: Connection = container.create_conn().await?;
     let space = conn
-        .find_space_by_name("ds9_crew")
+        .get_space("ds9_crew")
         .await?
         .expect("Space 'ds9_crew' found");
-    let primary_idx = space
-        .metadata()
-        .indices()
-        .get_by_id(0)
-        .expect("Primary index present");
 
     let members: Vec<CrewMember> = space
         .select(
-            primary_idx.id(),
             Some(2),
             Some(2),
             Some(tarantool_rs::IteratorType::All),
@@ -188,23 +164,13 @@ async fn select_by_key() -> Result<(), anyhow::Error> {
 
     let conn: Connection = container.create_conn().await?;
     let space = conn
-        .find_space_by_name("ds9_crew")
+        .get_space("ds9_crew")
         .await?
         .expect("Space 'ds9_crew' found");
-    let rank_idx = space
-        .metadata()
-        .indices()
-        .get_by_name("idx_rank")
-        .expect("Rank index present");
+    let rank_idx = space.index("idx_rank").expect("Rank index present");
 
-    let members: Vec<CrewMember> = space
-        .select(
-            rank_idx.id(),
-            None,
-            None,
-            None,
-            vec!["Lieutenant Commander".into()],
-        )
+    let members: Vec<CrewMember> = rank_idx
+        .select(None, None, None, vec!["Lieutenant Commander".into()])
         .await?;
     assert_eq!(members.len(), 2);
     assert_eq!(

@@ -15,10 +15,7 @@ mod stream;
 mod transaction;
 
 mod private {
-    use crate::{
-        client::{Connection, Stream, Transaction},
-        schema::Space,
-    };
+    use crate::client::{Connection, Stream, Transaction};
 
     #[doc(hidden)]
     pub trait Sealed {}
@@ -26,7 +23,6 @@ mod private {
     impl Sealed for Connection {}
     impl Sealed for Stream {}
     impl Sealed for Transaction {}
-    impl<E> Sealed for Space<E> {}
     impl<S: Sealed + ?Sized> Sealed for &S {}
     impl<S: Sealed + ?Sized> Sealed for &mut S {}
 }

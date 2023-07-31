@@ -2,7 +2,6 @@
 //
 // Features:
 //
-// * [ ] Wrappers around schema types, allowing to call methods directly on space or index
 // * [ ] connections pooling
 // * [ ] chunked responses (tt feature)
 // * [ ] streaming responses for select

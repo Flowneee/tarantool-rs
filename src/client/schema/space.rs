@@ -1,10 +1,13 @@
-use std::fmt::{self, Debug};
+use std::{
+    fmt::{self, Debug},
+    sync::Arc,
+};
 
-use async_trait::async_trait;
+use anyhow::Context;
 use rmpv::Value;
 use serde::{de::DeserializeOwned, Deserialize};
 
-use super::{IndexMetadata, SystemSpacesId};
+use super::{Index, IndexMetadata, OwnedIndex, SchemaEntityKey, SystemSpacesId, PRIMARY_INDEX_ID};
 use crate::{
     client::ConnectionLike, utils::UniqueIdNameMap, Error, Executor, IteratorType, Result,
 };
@@ -12,17 +15,13 @@ use crate::{
 /// Space metadata with its indices metadata from [system views](https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_space/system_views/).
 #[derive(Clone, Deserialize)]
 pub struct SpaceMetadata {
-    id: u32,
+    pub(super) id: u32,
     owner_id: u32,
     name: String,
     _engine: String, // TODO: enum
     _fields_count: u32,
     _flags: Value,       // TODO: parse flags
     _format: Vec<Value>, // TODO: parse format or remove it entirely
-    // TODO: maybe implement hash directly on IndexMetadata and store in set
-    // TODO: maybe vec or btreemap would be faster
-    #[serde(skip)]
-    indices: UniqueIdNameMap<IndexMetadata>,
 }
 
 impl fmt::Debug for SpaceMetadata {
@@ -35,34 +34,19 @@ impl fmt::Debug for SpaceMetadata {
             // TODO: uncomment when fields implemented
             // .field("_flags", &self._flags)
             // .field("_format", &self._format)
-            .field("indices", &self.indices)
             .finish()
     }
 }
 
 impl SpaceMetadata {
-    /// Load metadata of single space by its id.
-    pub async fn load_by_id(conn: impl ConnectionLike, id: u32) -> Result<Option<Self>> {
-        // 0 - primary id index
-        Self::load(conn, 0, id).await
-    }
-
-    /// Load metadata of single space by its name.
-    pub async fn load_by_name(conn: impl ConnectionLike, name: &str) -> Result<Option<Self>> {
-        // 2 - index on 'name' field
-        Self::load(conn, 2, name).await
-    }
-
     /// Load metadata of single space by key.
-    async fn load(
-        conn: impl ConnectionLike,
-        index_id: u32,
-        key: impl Into<Value>,
-    ) -> Result<Option<Self>> {
-        let Some(mut this): Option<Self> = conn
+    ///
+    /// Can be loaded by index (if passed unsigned integer) or name (if passed `&str`).
+    async fn load(conn: impl ConnectionLike, key: SchemaEntityKey) -> Result<Option<Self>> {
+        Ok(conn
             .select(
                 SystemSpacesId::VSpace as u32,
-                index_id,
+                key.space_index_id(),
                 None,
                 None,
                 None,
@@ -70,24 +54,7 @@ impl SpaceMetadata {
             )
             .await?
             .into_iter()
-            .next()
-        else {
-            return Ok(None);
-        };
-        this.load_indices(conn).await?;
-        Ok(Some(this))
-    }
-
-    /// Load indices metadata into current space metadata.
-    async fn load_indices(&mut self, conn: impl ConnectionLike) -> Result<()> {
-        self.indices = IndexMetadata::load_by_space_id(conn, self.id)
-            .await
-            .and_then(|x| {
-                UniqueIdNameMap::try_from_iter(x).map_err(|err| {
-                    Error::MetadataLoad(err.context("Failed to load indices metadata"))
-                })
-            })?;
-        Ok(())
+            .next())
     }
 
     /// Returns the id of this space.
@@ -105,15 +72,21 @@ impl SpaceMetadata {
         self.name.as_ref()
     }
 
-    /// Returns map of idices in this space.
-    pub fn indices(&self) -> &UniqueIdNameMap<IndexMetadata> {
-        &self.indices
-    }
+    // /// Returns map of idices in this space.
+    // pub fn indices(&self) -> &UniqueIdNameMap<IndexMetadata> {
+    //     &self.indices
+    // }
 }
 
+/// Tarantool space.
+///
+/// This is a wrapper around [`Executor`], which allow to make space-related requests
+/// on specific space. All requests over index uses primary index.
 pub struct Space<E> {
     executor: E,
-    metadata: SpaceMetadata,
+    metadata: Arc<SpaceMetadata>,
+    primary_index_metadata: Arc<IndexMetadata>,
+    indices_metadata: Arc<UniqueIdNameMap<IndexMetadata>>,
 }
 
 impl<E: Clone> Clone for Space<E> {
@@ -121,13 +94,18 @@ impl<E: Clone> Clone for Space<E> {
         Self {
             executor: self.executor.clone(),
             metadata: self.metadata.clone(),
+            primary_index_metadata: self.primary_index_metadata.clone(),
+            indices_metadata: self.indices_metadata.clone(),
         }
     }
 }
 
 impl<E> Space<E> {
-    pub fn new(executor: E, metadata: SpaceMetadata) -> Self {
-        Self { executor, metadata }
+    fn get_index(&self, key: impl Into<SchemaEntityKey>) -> Option<&Arc<IndexMetadata>> {
+        match key.into() {
+            SchemaEntityKey::Id(x) => self.indices_metadata.get_by_id(x),
+            SchemaEntityKey::Name(x) => self.indices_metadata.get_by_name(&x),
+        }
     }
 
     pub fn executor(&self) -> &E {
@@ -137,29 +115,77 @@ impl<E> Space<E> {
     pub fn metadata(&self) -> &SpaceMetadata {
         &self.metadata
     }
+
+    pub fn into_executor(self) -> E {
+        self.executor
+    }
+
+    pub fn primary_index(&self) -> Index<&E> {
+        Index::new(&self.executor, &self.primary_index_metadata, &self.metadata)
+    }
+
+    pub fn index(&self, key: impl Into<SchemaEntityKey>) -> Option<Index<&E>> {
+        self.get_index(key)
+            .map(|index| Index::new(&self.executor, &index, &self.metadata))
+    }
+}
+
+impl<E: Clone> Space<E> {
+    pub fn owned_primary_index(&self) -> OwnedIndex<E> {
+        OwnedIndex::new(
+            self.executor.clone(),
+            self.primary_index_metadata.clone(),
+            self.metadata.clone(),
+        )
+    }
+
+    pub fn owned_index(&self, key: impl Into<SchemaEntityKey>) -> Option<OwnedIndex<E>> {
+        self.get_index(key).map(|index| {
+            OwnedIndex::new(self.executor.clone(), index.clone(), self.metadata.clone())
+        })
+    }
 }
 
 impl<E: Executor> Space<E> {
-    /// Load metadata of single space by its id.
-    pub async fn load_by_id(executor: E, id: u32) -> Result<Option<Self>> {
-        let Some(metadata) = SpaceMetadata::load_by_id(&executor, id).await? else {
+    /// Load metadata of single space by its key.
+    ///
+    /// Can be called with space's index (if passed unsigned integer) or name (if passed `&str`).
+    pub(crate) async fn load(executor: E, key: SchemaEntityKey) -> Result<Option<Self>> {
+        let Some(space_metadata) = SpaceMetadata::load(&executor, key).await? else {
             return Ok(None);
         };
-        Ok(Some(Self::new(executor, metadata)))
-    }
 
-    /// Load metadata of single space by its name.
-    pub async fn load_by_name(executor: E, name: &str) -> Result<Option<Self>> {
-        let Some(metadata) = SpaceMetadata::load_by_name(&executor, name).await? else {
-            return Ok(None);
+        let indices = IndexMetadata::load_by_space_id(&executor, space_metadata.id)
+            .await
+            .and_then(|x| {
+                UniqueIdNameMap::try_from_iter(x)
+                    .context("Duplicate indices in space")
+                    .map_err(Error::Other)
+            })?;
+        let Some(primary_index) = indices.get_by_id(PRIMARY_INDEX_ID).cloned() else {
+            return Err(Error::SpaceMissingPrimaryIndex);
         };
-        Ok(Some(Self::new(executor, metadata)))
+
+        Ok(Some(Self {
+            executor,
+            metadata: space_metadata.into(),
+            primary_index_metadata: primary_index.into(),
+            indices_metadata: indices.into(),
+        }))
     }
 
-    // TODO: docs
+    /// Iterator over indices in this space.
+    pub fn indices(&self) -> impl Iterator<Item = Index<&E>> {
+        self.indices_metadata
+            .iter()
+            .map(|index| Index::new(&self.executor, &index, &self.metadata))
+    }
+
+    /// Call `select` with primary index on current space.
+    ///
+    /// For details see [`ConnectionLike::select`].
     pub async fn select<T>(
         &self,
-        index_id: u32,
         limit: Option<u32>,
         offset: Option<u32>,
         iterator: Option<IteratorType>,
@@ -169,24 +195,39 @@ impl<E: Executor> Space<E> {
         T: DeserializeOwned,
     {
         self.executor
-            .select(self.metadata.id, index_id, limit, offset, iterator, keys)
+            .select(
+                self.metadata.id,
+                PRIMARY_INDEX_ID,
+                limit,
+                offset,
+                iterator,
+                keys,
+            )
             .await
     }
 
-    // TODO: docs
+    /// Call `insert` on current space.
+    ///
+    /// For details see [`ConnectionLike::insert`].
     // TODO: decode response
     pub async fn insert(&self, tuple: Vec<Value>) -> Result<()> {
         self.executor.insert(self.metadata.id, tuple).await
     }
 
+    /// Call `update` with primary index on current space.
+    ///
+    /// For details see [`ConnectionLike::update`].
     // TODO: structured tuple
     // TODO: decode response
-    pub async fn update(&self, index_id: u32, keys: Vec<Value>, tuple: Vec<Value>) -> Result<()> {
+    pub async fn update(&self, keys: Vec<Value>, tuple: Vec<Value>) -> Result<()> {
         self.executor
-            .update(self.metadata.id, index_id, keys, tuple)
+            .update(self.metadata.id, PRIMARY_INDEX_ID, keys, tuple)
             .await
     }
 
+    /// Call `upsert` on current space.
+    ///
+    /// For details see [`ConnectionLike::upsert`].
     // TODO: structured tuple
     // TODO: decode response
     // TODO: maybe set index base to 1 always?
@@ -194,38 +235,24 @@ impl<E: Executor> Space<E> {
         self.executor.upsert(self.metadata.id, ops, tuple).await
     }
 
+    /// Call `replace` on current space.
+    ///
+    /// For details see [`ConnectionLike::replace`].
     // TODO: structured tuple
     // TODO: decode response
     pub async fn replace(&self, keys: Vec<Value>) -> Result<()> {
         self.executor.replace(self.metadata.id, keys).await
     }
 
+    /// Call `delete` with primary index on current space.
+    ///
+    /// For details see [`ConnectionLike::delete`].
     // TODO: structured tuple
     // TODO: decode response
-    pub async fn delete(&self, index_id: u32, keys: Vec<Value>) -> Result<()> {
-        self.executor.delete(self.metadata.id, index_id, keys).await
-    }
-}
-
-#[async_trait]
-impl<E: Executor> Executor for Space<E> {
-    async fn send_encoded_request(
-        &self,
-        request: crate::codec::request::EncodedRequest,
-    ) -> crate::Result<Value> {
-        self.executor.send_encoded_request(request).await
-    }
-
-    fn stream(&self) -> crate::Stream {
-        self.executor.stream()
-    }
-
-    fn transaction_builder(&self) -> crate::TransactionBuilder {
-        self.executor.transaction_builder()
-    }
-
-    async fn transaction(&self) -> crate::Result<crate::Transaction> {
-        self.executor.transaction().await
+    pub async fn delete(&self, keys: Vec<Value>) -> Result<()> {
+        self.executor
+            .delete(self.metadata.id, PRIMARY_INDEX_ID, keys)
+            .await
     }
 }
 

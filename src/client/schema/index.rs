@@ -1,10 +1,10 @@
-use std::fmt;
+use std::{borrow::Borrow, fmt, sync::Arc};
 
 use rmpv::Value;
-use serde::Deserialize;
+use serde::{de::DeserializeOwned, Deserialize};
 
-use super::SystemSpacesId;
-use crate::{client::ConnectionLike, utils::UniqueIdName, Error};
+use super::{SpaceMetadata, SystemSpacesId, PRIMARY_INDEX_ID};
+use crate::{client::ConnectionLike, utils::UniqueIdName, Executor, IteratorType, Result};
 
 /// Index metadata from [system view](https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_space/system_views/).
 #[derive(Clone, Deserialize)]
@@ -35,10 +35,7 @@ impl fmt::Debug for IndexMetadata {
 impl IndexMetadata {
     // TODO: replace space_id type from u32 to something generic
     /// Load list of indices of single space.
-    pub async fn load_by_space_id(
-        conn: impl ConnectionLike,
-        space_id: u32,
-    ) -> Result<Vec<Self>, Error> {
+    pub async fn load_by_space_id(conn: impl ConnectionLike, space_id: u32) -> Result<Vec<Self>> {
         conn.select(
             SystemSpacesId::VIndex as u32,
             0,
@@ -60,6 +57,11 @@ impl IndexMetadata {
         self.index_id
     }
 
+    /// Returns whether this index is primary or not.
+    pub fn is_primary(&self) -> bool {
+        self.index_id == PRIMARY_INDEX_ID
+    }
+
     /// Returns a name of this index.
     pub fn name(&self) -> &str {
         self.name.as_ref()
@@ -78,5 +80,131 @@ impl UniqueIdName for IndexMetadata {
 
     fn name(&self) -> &str {
         &self.name
+    }
+}
+
+/// Tarantool index of specific space.
+///
+/// This is a wrapper around [`Executor`], which allow to make index-related requests
+/// on specific index.
+pub struct GenericIndex<E, M, S> {
+    executor: E,
+    metadata: M,
+    space_metadata: S,
+}
+
+/// Referenced index type, which rely on `Space` object.
+pub type Index<'a, E> = GenericIndex<E, &'a IndexMetadata, &'a SpaceMetadata>;
+
+/// Owned index type, which can exists without related `Space` object.
+pub type OwnedIndex<E> = GenericIndex<E, Arc<IndexMetadata>, Arc<SpaceMetadata>>;
+
+impl<E, M, S> Clone for GenericIndex<E, M, S>
+where
+    E: Clone,
+    M: Clone,
+    S: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            executor: self.executor.clone(),
+            metadata: self.metadata.clone(),
+            space_metadata: self.space_metadata.clone(),
+        }
+    }
+}
+
+impl<E, M, S> GenericIndex<E, M, S> {
+    pub(super) fn new(executor: E, metadata: M, space_metadata: S) -> Self {
+        Self {
+            executor,
+            metadata,
+            space_metadata,
+        }
+    }
+
+    pub fn into_executor(self) -> E {
+        self.executor
+    }
+}
+
+impl<E, M, S> GenericIndex<E, M, S>
+where
+    M: Borrow<IndexMetadata>,
+    S: Borrow<SpaceMetadata>,
+{
+    pub fn executor(&self) -> &E {
+        &self.executor
+    }
+
+    pub fn metadata(&self) -> &IndexMetadata {
+        self.metadata.borrow()
+    }
+
+    pub fn space_metadata(&self) -> &SpaceMetadata {
+        self.space_metadata.borrow()
+    }
+}
+
+impl<E, M, S> GenericIndex<E, M, S>
+where
+    E: Executor,
+    M: Borrow<IndexMetadata>,
+    S: Borrow<SpaceMetadata>,
+{
+    /// Call `select` on current index.
+    ///
+    /// For details see [`ConnectionLike::select`].
+    pub async fn select<T>(
+        &self,
+        limit: Option<u32>,
+        offset: Option<u32>,
+        iterator: Option<IteratorType>,
+        keys: Vec<Value>,
+    ) -> Result<Vec<T>>
+    where
+        T: DeserializeOwned,
+    {
+        self.executor
+            .select(
+                self.space_metadata.borrow().id,
+                self.metadata.borrow().index_id,
+                limit,
+                offset,
+                iterator,
+                keys,
+            )
+            .await
+    }
+
+    /// Call `update` on current index.
+    ///
+    /// For details see [`ConnectionLike::update`].
+    // TODO: structured tuple
+    // TODO: decode response
+    pub async fn update(&self, keys: Vec<Value>, tuple: Vec<Value>) -> Result<()> {
+        self.executor
+            .update(
+                self.space_metadata.borrow().id,
+                self.metadata.borrow().index_id,
+                keys,
+                tuple,
+            )
+            .await
+    }
+
+    /// Call `delete` on current index.
+    ///
+    /// For details see [`ConnectionLike::delete`].
+    // TODO: structured tuple
+    // TODO: decode response
+    pub async fn delete(&self, keys: Vec<Value>) -> Result<()> {
+        self.executor
+            .delete(
+                self.space_metadata.borrow().id,
+                self.metadata.borrow().index_id,
+                keys,
+            )
+            .await
     }
 }

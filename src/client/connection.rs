@@ -20,7 +20,7 @@ use crate::{
         request::{EncodedRequest, Id, Request},
         response::ResponseBody,
     },
-    schema::Space,
+    schema::{SchemaEntityKey, Space},
     transport::DispatcherSender,
     Result,
 };
@@ -122,13 +122,10 @@ impl Connection {
     }
 
     /// Find and load space by its id.
-    pub async fn find_space_by_id(&self, id: u32) -> Result<Option<Space<Self>>> {
-        Space::load_by_id(self.clone(), id).await
-    }
-
-    /// Find and load space by its name.
-    pub async fn find_space_by_name(&self, name: &str) -> Result<Option<Space<Self>>> {
-        Space::load_by_name(self.clone(), name).await
+    ///
+    /// Can be called with space's index (if passed unsigned integer) or name (if passed `&str`).
+    pub async fn get_space(&self, key: impl Into<SchemaEntityKey>) -> Result<Option<Space<Self>>> {
+        Space::load(self.clone(), key.into()).await
     }
 }
 

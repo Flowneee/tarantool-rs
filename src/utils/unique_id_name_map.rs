@@ -136,12 +136,12 @@ impl<T: UniqueIdName> UniqueIdNameMap<T> {
         Ok(map)
     }
 
-    pub fn get_by_name(&self, k: &str) -> Option<&T> {
-        self.by_name.get(k).map(|x| &*x.0)
+    pub fn get_by_name(&self, k: &str) -> Option<&Arc<T>> {
+        self.by_name.get(k).map(|x| &x.0)
     }
 
-    pub fn get_by_id(&self, k: u32) -> Option<&T> {
-        self.by_id.get(&k).map(|x| &*x.0)
+    pub fn get_by_id(&self, k: u32) -> Option<&Arc<T>> {
+        self.by_id.get(&k).map(|x| &x.0)
     }
 
     pub fn len(&self) -> usize {
@@ -150,6 +150,10 @@ impl<T: UniqueIdName> UniqueIdNameMap<T> {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Arc<T>> {
+        self.by_id.iter().map(|x| &x.0)
     }
 }
 
