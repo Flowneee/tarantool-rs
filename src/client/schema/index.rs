@@ -4,7 +4,7 @@ use rmpv::Value;
 use serde::{de::DeserializeOwned, Deserialize};
 
 use super::{SpaceMetadata, SystemSpacesId, PRIMARY_INDEX_ID};
-use crate::{client::ConnectionLike, utils::UniqueIdName, Executor, IteratorType, Result};
+use crate::{client::ExecutorExt, utils::UniqueIdName, Executor, IteratorType, Result};
 
 /// Index metadata from [system view](https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_space/system_views/).
 #[derive(Clone, Deserialize)]
@@ -35,7 +35,7 @@ impl fmt::Debug for IndexMetadata {
 impl IndexMetadata {
     // TODO: replace space_id type from u32 to something generic
     /// Load list of indices of single space.
-    pub async fn load_by_space_id(conn: impl ConnectionLike, space_id: u32) -> Result<Vec<Self>> {
+    pub async fn load_by_space_id(conn: impl ExecutorExt, space_id: u32) -> Result<Vec<Self>> {
         conn.select(
             SystemSpacesId::VIndex as u32,
             0,
@@ -154,7 +154,7 @@ where
 {
     /// Call `select` on current index.
     ///
-    /// For details see [`ConnectionLike::select`].
+    /// For details see [`ExecutorExt::select`].
     pub async fn select<T>(
         &self,
         limit: Option<u32>,
@@ -179,7 +179,7 @@ where
 
     /// Call `update` on current index.
     ///
-    /// For details see [`ConnectionLike::update`].
+    /// For details see [`ExecutorExt::update`].
     // TODO: structured tuple
     // TODO: decode response
     pub async fn update(&self, keys: Vec<Value>, tuple: Vec<Value>) -> Result<()> {
@@ -195,7 +195,7 @@ where
 
     /// Call `delete` on current index.
     ///
-    /// For details see [`ConnectionLike::delete`].
+    /// For details see [`ExecutorExt::delete`].
     // TODO: structured tuple
     // TODO: decode response
     pub async fn delete(&self, keys: Vec<Value>) -> Result<()> {

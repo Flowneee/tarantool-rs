@@ -3,10 +3,13 @@ use std::fmt::Debug;
 use async_trait::async_trait;
 use rmpv::Value;
 
-use super::private::Sealed;
-use crate::{codec::request::EncodedRequest, Result, Stream, Transaction, TransactionBuilder};
+use crate::{
+    client::{private::Sealed, Stream, Transaction, TransactionBuilder},
+    codec::request::EncodedRequest,
+    Result,
+};
 
-// TODO: docs
+/// Type, which can make requests to Tarantool and create streams and transactions.
 #[async_trait]
 pub trait Executor: Sealed + Send + Sync + Debug {
     /// Send encoded request.
@@ -70,7 +73,7 @@ impl<E: Executor + Sealed + Sync + Debug> Executor for &mut E {
 #[cfg(test)]
 mod ui {
     use super::*;
-    use crate::ConnectionLike;
+    use crate::ExecutorExt;
 
     #[test]
     fn executor_trait_object_safety() {

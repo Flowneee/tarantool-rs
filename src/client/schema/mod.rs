@@ -1,3 +1,5 @@
+//! Schema (spaces and indices) helper types.
+
 pub use self::{
     index::{GenericIndex, Index, IndexMetadata, OwnedIndex},
     space::{Space, SpaceMetadata},
@@ -13,7 +15,7 @@ mod space;
 
 /// First possible id of user space.
 ///
-/// For details see [`SystemSpaceId`].
+/// For details see [`SystemSpacesId`].
 pub const USER_SPACE_MIN_ID: u32 = 512;
 
 /// Id of the primary index in space.
@@ -32,9 +34,12 @@ pub enum SystemSpacesId {
     VIndex = 289,
 }
 
+/// Key of space or index.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SchemaEntityKey {
+    /// Schema entity symbolic name.
     Name(String),
+    /// Internal id of entity.
     Id(u32),
 }
 

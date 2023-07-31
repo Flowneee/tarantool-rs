@@ -95,6 +95,9 @@ impl Default for TransactionIsolationLevel {
     }
 }
 
+/// Iterator type for `select` requests.
+///
+/// For details check Tarantool documantation <https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_index/pairs/>.
 #[derive(Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum IteratorType {

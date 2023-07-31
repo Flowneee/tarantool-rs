@@ -1,3 +1,5 @@
+//! Errors module.
+
 use std::{borrow::Cow, fmt, sync::Arc};
 
 use rmp::{
@@ -5,6 +7,7 @@ use rmp::{
     encode::{RmpWriteErr, ValueWriteError},
 };
 
+/// Error returned by Tarantool in response to a request.
 #[derive(Clone, Debug, thiserror::Error)]
 #[error("{description} (code {code})")]
 pub struct ErrorResponse {
@@ -23,6 +26,7 @@ impl ErrorResponse {
     }
 }
 
+/// Represents all possible errors of this crate.
 #[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

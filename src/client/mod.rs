@@ -1,7 +1,7 @@
 pub use self::{
     connection::Connection,
-    connection_like::ConnectionLike,
     executor::Executor,
+    executor_ext::ExecutorExt,
     stream::Stream,
     transaction::{Transaction, TransactionBuilder},
 };
@@ -9,8 +9,8 @@ pub use self::{
 pub mod schema;
 
 mod connection;
-mod connection_like;
 mod executor;
+mod executor_ext;
 mod stream;
 mod transaction;
 

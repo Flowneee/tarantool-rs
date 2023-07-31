@@ -12,19 +12,28 @@ use futures::{future::BoxFuture, TryFutureExt};
 use rmpv::Value;
 use tracing::debug;
 
-use super::{Executor, Stream, Transaction, TransactionBuilder};
 use crate::{
     builder::ConnectionBuilder,
+    client::{
+        schema::{SchemaEntityKey, Space},
+        Executor, Stream, Transaction, TransactionBuilder,
+    },
     codec::{
         consts::TransactionIsolationLevel,
         request::{EncodedRequest, Id, Request},
         response::ResponseBody,
     },
-    schema::{SchemaEntityKey, Space},
     transport::DispatcherSender,
     Result,
 };
 
+/// Connection to Tarantool instance.
+///
+/// This type doesn't represent single TCP connection, but rather an abstraction
+/// for interaction with Tarantool instance.
+///
+/// Underling implemenation could reconnect automatically (depending on builder configuration),
+/// and could do pooling in the future (not yet implemented!).
 #[derive(Clone)]
 pub struct Connection {
     inner: Arc<ConnectionInner>,
@@ -121,7 +130,7 @@ impl Connection {
         self.transaction_builder().begin().await
     }
 
-    /// Find and load space by its id.
+    /// Find and load space by key.
     ///
     /// Can be called with space's index (if passed unsigned integer) or name (if passed `&str`).
     pub async fn get_space(&self, key: impl Into<SchemaEntityKey>) -> Result<Option<Space<Self>>> {

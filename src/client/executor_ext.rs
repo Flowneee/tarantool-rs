@@ -17,8 +17,10 @@ use crate::{
     IteratorType, Result,
 };
 
+/// Helper trait around [`Executor`] trait, which allows to send specific requests
+/// with any type, implementing `Execitor` trait.
 #[async_trait]
-pub trait ConnectionLike: Executor {
+pub trait ExecutorExt: Executor {
     /// Send request, receiving raw response body.
     ///
     /// It is not recommended to use this method directly, since some requests
@@ -121,7 +123,7 @@ pub trait ConnectionLike: Executor {
 }
 
 #[async_trait]
-impl<E: Executor + ?Sized> ConnectionLike for E {
+impl<E: Executor + ?Sized> ExecutorExt for E {
     fn send_request<R>(&self, body: R) -> BoxFuture<Result<Value>>
     where
         R: Request,

@@ -19,6 +19,7 @@
 
 pub use rmpv::Value;
 
+#[doc(inline)]
 pub use self::{
     builder::{ConnectionBuilder, ReconnectInterval},
     client::*,
@@ -34,4 +35,5 @@ mod client;
 mod codec;
 mod transport;
 
+/// Alias for [`std::result::Result<T, crate::Error>`].
 pub type Result<T> = std::result::Result<T, Error>;

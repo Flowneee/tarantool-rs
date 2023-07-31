@@ -14,7 +14,7 @@ use crate::{codec::request::EncodedRequest, Executor, Result};
 /// # Example
 ///
 /// ```rust,compile
-/// use tarantool_rs::{Connection, ConnectionLike, Executor};
+/// use tarantool_rs::{Connection, Executor, ExecutorExt};
 /// # use futures::FutureExt;
 /// # use rmpv::Value;
 ///

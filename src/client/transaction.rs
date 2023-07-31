@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use rmpv::Value;
 use tracing::debug;
 
-use super::{Connection, ConnectionLike, Stream};
+use super::{Connection, ExecutorExt, Stream};
 use crate::{
     codec::{
         consts::TransactionIsolationLevel,

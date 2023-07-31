@@ -8,9 +8,7 @@ use rmpv::Value;
 use serde::{de::DeserializeOwned, Deserialize};
 
 use super::{Index, IndexMetadata, OwnedIndex, SchemaEntityKey, SystemSpacesId, PRIMARY_INDEX_ID};
-use crate::{
-    client::ConnectionLike, utils::UniqueIdNameMap, Error, Executor, IteratorType, Result,
-};
+use crate::{client::ExecutorExt, utils::UniqueIdNameMap, Error, Executor, IteratorType, Result};
 
 /// Space metadata with its indices metadata from [system views](https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_space/system_views/).
 #[derive(Clone, Deserialize)]
@@ -42,7 +40,7 @@ impl SpaceMetadata {
     /// Load metadata of single space by key.
     ///
     /// Can be loaded by index (if passed unsigned integer) or name (if passed `&str`).
-    async fn load(conn: impl ConnectionLike, key: SchemaEntityKey) -> Result<Option<Self>> {
+    async fn load(conn: impl ExecutorExt, key: SchemaEntityKey) -> Result<Option<Self>> {
         Ok(conn
             .select(
                 SystemSpacesId::VSpace as u32,
@@ -183,7 +181,7 @@ impl<E: Executor> Space<E> {
 
     /// Call `select` with primary index on current space.
     ///
-    /// For details see [`ConnectionLike::select`].
+    /// For details see [`ExecutorExt::select`].
     pub async fn select<T>(
         &self,
         limit: Option<u32>,
@@ -208,7 +206,7 @@ impl<E: Executor> Space<E> {
 
     /// Call `insert` on current space.
     ///
-    /// For details see [`ConnectionLike::insert`].
+    /// For details see [`ExecutorExt::insert`].
     // TODO: decode response
     pub async fn insert(&self, tuple: Vec<Value>) -> Result<()> {
         self.executor.insert(self.metadata.id, tuple).await
@@ -216,7 +214,7 @@ impl<E: Executor> Space<E> {
 
     /// Call `update` with primary index on current space.
     ///
-    /// For details see [`ConnectionLike::update`].
+    /// For details see [`ExecutorExt::update`].
     // TODO: structured tuple
     // TODO: decode response
     pub async fn update(&self, keys: Vec<Value>, tuple: Vec<Value>) -> Result<()> {
@@ -227,7 +225,7 @@ impl<E: Executor> Space<E> {
 
     /// Call `upsert` on current space.
     ///
-    /// For details see [`ConnectionLike::upsert`].
+    /// For details see [`ExecutorExt::upsert`].
     // TODO: structured tuple
     // TODO: decode response
     // TODO: maybe set index base to 1 always?
@@ -237,7 +235,7 @@ impl<E: Executor> Space<E> {
 
     /// Call `replace` on current space.
     ///
-    /// For details see [`ConnectionLike::replace`].
+    /// For details see [`ExecutorExt::replace`].
     // TODO: structured tuple
     // TODO: decode response
     pub async fn replace(&self, keys: Vec<Value>) -> Result<()> {
@@ -246,7 +244,7 @@ impl<E: Executor> Space<E> {
 
     /// Call `delete` with primary index on current space.
     ///
-    /// For details see [`ConnectionLike::delete`].
+    /// For details see [`ExecutorExt::delete`].
     // TODO: structured tuple
     // TODO: decode response
     pub async fn delete(&self, keys: Vec<Value>) -> Result<()> {

@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - `Index` API, which simplify making `select` and CRUD requsts on specific index.
 
 ### Changed
- - Few renames.
+ - `ConnectionLike` renamed to `ExecutorExt`;
+ - Few smaller renames;
 
 ### Removed
  - `Error::MetadataLoad` variant;

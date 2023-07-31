@@ -3,7 +3,7 @@ extern crate rental;
 
 use assert_matches::assert_matches;
 use serde::Deserialize;
-use tarantool_rs::{errors::Error, Connection, ConnectionLike};
+use tarantool_rs::{errors::Error, Connection, ExecutorExt};
 
 use crate::common::TarantoolTestContainer;
 
