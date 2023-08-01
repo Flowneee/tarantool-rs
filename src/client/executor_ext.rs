@@ -7,13 +7,10 @@ use serde::de::DeserializeOwned;
 
 use super::Executor;
 use crate::{
-    codec::{
-        request::{
-            Call, Delete, EncodedRequest, Eval, Insert, Ping, Replace, Request, Select, Update,
-            Upsert,
-        },
-        utils::deserialize_non_sql_response,
+    codec::request::{
+        Call, Delete, EncodedRequest, Eval, Insert, Ping, Replace, Request, Select, Update, Upsert,
     },
+    utils::extract_and_deserialize_iproto_data,
     IteratorType, Result,
 };
 
@@ -29,32 +26,38 @@ pub trait ExecutorExt: Executor {
     where
         R: Request;
 
-    /// Send PING request ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#iproto-ping-0x40)).
+    /// Ping tarantool instance.
     async fn ping(&self) -> Result<()> {
         self.send_request(Ping {}).await.map(drop)
     }
 
-    // TODO: docs
+    // TODO: add examples
+
+    /// Evaluate Lua expression.
+    ///
+    /// Check [docs][crate#deserializing-lua-responses-in-call-and-eval] on how to deserialize response.
     async fn eval<I, T>(&self, expr: I, args: Vec<Value>) -> Result<T>
     where
         I: Into<Cow<'static, str>> + Send,
         T: DeserializeOwned,
     {
         let body = self.send_request(Eval::new(expr, args)).await?;
-        deserialize_non_sql_response(body).map_err(Into::into)
+        extract_and_deserialize_iproto_data(body).map_err(Into::into)
     }
 
-    // TODO: docs
+    /// Remotely call function in Tarantool.
+    ///
+    /// Check [docs][crate#deserializing-lua-responses-in-call-and-eval] on how to deserialize response.
     async fn call<I, T>(&self, function_name: I, args: Vec<Value>) -> Result<T>
     where
         I: Into<Cow<'static, str>> + Send,
         T: DeserializeOwned,
     {
         let body = self.send_request(Call::new(function_name, args)).await?;
-        deserialize_non_sql_response(body).map_err(Into::into)
+        extract_and_deserialize_iproto_data(body).map_err(Into::into)
     }
 
-    // TODO: docs
+    /// Select tuples from space.
     async fn select<T>(
         &self,
         space_id: u32,
@@ -72,11 +75,11 @@ pub trait ExecutorExt: Executor {
                 space_id, index_id, limit, offset, iterator, keys,
             ))
             .await?;
-        deserialize_non_sql_response(body).map_err(Into::into)
+        extract_and_deserialize_iproto_data(body).map_err(Into::into)
     }
 
-    // TODO: docs
     // TODO: decode response
+    /// Insert tuple.
     async fn insert(&self, space_id: u32, tuple: Vec<Value>) -> Result<()> {
         let _ = self.send_request(Insert::new(space_id, tuple)).await?;
         Ok(())
@@ -84,6 +87,7 @@ pub trait ExecutorExt: Executor {
 
     // TODO: structured tuple
     // TODO: decode response
+    /// Update tuple.
     async fn update(
         &self,
         space_id: u32,
@@ -100,6 +104,7 @@ pub trait ExecutorExt: Executor {
     // TODO: structured tuple
     // TODO: decode response
     // TODO: maybe set index base to 1 always?
+    /// Update or insert tuple.
     async fn upsert(&self, space_id: u32, ops: Vec<Value>, tuple: Vec<Value>) -> Result<()> {
         let _ = self.send_request(Upsert::new(space_id, ops, tuple)).await?;
         Ok(())
@@ -107,6 +112,8 @@ pub trait ExecutorExt: Executor {
 
     // TODO: structured tuple
     // TODO: decode response
+    /// Insert a tuple into a space. If a tuple with the same primary key already exists,
+    /// replaces the existing tuple with a new one.
     async fn replace(&self, space_id: u32, keys: Vec<Value>) -> Result<()> {
         let _ = self.send_request(Replace::new(space_id, keys)).await?;
         Ok(())
@@ -114,6 +121,7 @@ pub trait ExecutorExt: Executor {
 
     // TODO: structured tuple
     // TODO: decode response
+    /// Delete a tuple identified by the primary key.
     async fn delete(&self, space_id: u32, index_id: u32, keys: Vec<Value>) -> Result<()> {
         let _ = self
             .send_request(Delete::new(space_id, index_id, keys))

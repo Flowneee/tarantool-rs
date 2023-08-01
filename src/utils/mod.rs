@@ -1,7 +1,9 @@
 //! Various helpers.
 
-pub use unique_id_name_map::UniqueIdNameMap;
+pub(crate) use self::{
+    deser::extract_and_deserialize_iproto_data,
+    unique_id_name_map::{UniqueIdName, UniqueIdNameMap},
+};
 
-pub(crate) use unique_id_name_map::UniqueIdName;
-
+mod deser;
 mod unique_id_name_map;

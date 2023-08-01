@@ -8,6 +8,15 @@
 
 Documentation available on [docs.rs](https://docs.rs/tarantool-rs/latest).
 
+### Supported Traantool versions
+
+Supported and tested Tarantool versions
+
+*`2.10.x`. 
+
+Other (especially newer) should work as well, but not tested. Versions below `2.10.x`
+doesn't have transactions support, so transaction API won't work.
+
 ### Example
 
 If you have `clients` space with 2 "columns": `id` and `name`:

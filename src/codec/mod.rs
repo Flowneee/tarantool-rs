@@ -120,6 +120,7 @@ impl Decoder for ClientCodec {
                 .map(Some)
                 .map_err(CodecDecodeError::Decode)
         } else {
+            src.reserve(next_frame_length - src.len());
             Ok(None)
         }
     }

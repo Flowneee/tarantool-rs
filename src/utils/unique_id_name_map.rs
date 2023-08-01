@@ -144,10 +144,12 @@ impl<T: UniqueIdName> UniqueIdNameMap<T> {
         self.by_id.get(&k).map(|x| &x.0)
     }
 
+    #[allow(unused)]
     pub fn len(&self) -> usize {
         self.by_name.len()
     }
 
+    #[allow(unused)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }

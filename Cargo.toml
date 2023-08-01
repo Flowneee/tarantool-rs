@@ -40,3 +40,14 @@ tokio = { version = "1", features = ["full"] }
 
 [[example]]
 name = "cli_client"
+
+[[example]]
+name = "schema"
+
+[[example]]
+name = "transactions"
+
+[[example]]
+name = "call"
+
+
