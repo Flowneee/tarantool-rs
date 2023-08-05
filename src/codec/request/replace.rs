@@ -1,32 +1,29 @@
-// TODO: unify with eval.rs
-
 use std::io::Write;
-
-use rmpv::Value;
 
 use crate::{
     codec::{
         consts::{keys, RequestType},
-        utils::{write_kv_array, write_kv_u32},
+        utils::{write_kv_tuple, write_kv_u32},
     },
     errors::EncodingError,
+    tuple::Tuple,
 };
 
 use super::Request;
 
 #[derive(Clone, Debug)]
-pub(crate) struct Replace {
+pub(crate) struct Replace<T> {
     pub space_id: u32,
-    pub tuple: Vec<Value>,
+    pub tuple: T,
 }
 
-impl Replace {
-    pub fn new(space_id: u32, tuple: Vec<Value>) -> Self {
+impl<T> Replace<T> {
+    pub fn new(space_id: u32, tuple: T) -> Self {
         Self { space_id, tuple }
     }
 }
 
-impl Request for Replace {
+impl<T: Tuple> Request for Replace<T> {
     fn request_type() -> RequestType
     where
         Self: Sized,
@@ -38,7 +35,7 @@ impl Request for Replace {
     fn encode(&self, mut buf: &mut dyn Write) -> Result<(), EncodingError> {
         rmp::encode::write_map_len(&mut buf, 2)?;
         write_kv_u32(buf, keys::SPACE_ID, self.space_id)?;
-        write_kv_array(buf, keys::TUPLE, &self.tuple)?;
+        write_kv_tuple(buf, keys::TUPLE, &self.tuple)?;
         Ok(())
     }
 }

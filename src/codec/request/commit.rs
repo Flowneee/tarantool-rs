@@ -1,5 +1,3 @@
-// TODO: unify with rollback/begin.rs
-
 use std::io::Write;
 
 use crate::{codec::consts::RequestType, errors::EncodingError};

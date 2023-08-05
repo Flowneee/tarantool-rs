@@ -23,20 +23,20 @@ use crate::{codec::request::EncodedRequest, Executor, Result};
 ///
 /// // This will print 'fast' and then 'slow'
 /// let eval_slow_fut = connection
-///     .eval::<_, Value>("fiber = require('fiber'); fiber.sleep(0.5); return ...;", vec!["slow".into()])
+///     .eval::<Value, _, _>("fiber = require('fiber'); fiber.sleep(0.5); return ...;", ("slow", ))
 ///     .inspect(|res| println!("{:?}", res));
 /// let eval_fast_fut = connection
-///     .eval::<_, Value>("return ...;", vec!["fast".into()])
+///     .eval::<Value, _, _>("return ...;", ("fast", ))
 ///     .inspect(|res| println!("{:?}", res));
 /// let _ = tokio::join!(eval_slow_fut, eval_fast_fut);
 ///
 /// // This will print 'slow' and then 'fast', since slow request was created first and have smaller sync
 /// let stream = connection.stream();
 /// let eval_slow_fut = stream
-///     .eval::<_, Value>("fiber = require('fiber'); fiber.sleep(0.5); return ...;", vec!["slow".into()])
+///     .eval::<Value, _, _>("fiber = require('fiber'); fiber.sleep(0.5); return ...;", ("slow", ))
 ///     .inspect(|res| println!("{:?}", res));
 /// let eval_fast_fut = stream
-///     .eval::<_, Value>("return ...;", vec!["fast".into()])
+///     .eval::<Value, _, _>("return ...;", ("fast", ))
 ///     .inspect(|res| println!("{:?}", res));
 /// let _ = tokio::join!(eval_slow_fut, eval_fast_fut);
 /// # }

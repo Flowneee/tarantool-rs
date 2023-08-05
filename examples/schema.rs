@@ -14,20 +14,18 @@ async fn main() -> Result<(), anyhow::Error> {
     info!(
         "Pre: {:?}",
         space
-            .select::<(i64, String)>(None, None, Some(IteratorType::All), vec![])
+            .select::<(i64, String), _>(None, None, Some(IteratorType::All), ())
             .await?
     );
-    space
-        .upsert(vec!["=".into()], vec![1.into(), "Second".into()])
-        .await?;
+    space.upsert(("=",), (1, "Second")).await?;
     space
         .update(
-            vec![0.into()],
-            vec![Value::Array(vec![
+            (0,),
+            (Value::Array(vec![
                 "=".into(),
                 1.into(),
                 "Second (updated)".into(),
-            ])],
+            ]),),
         )
         .await?;
     info!(
@@ -35,7 +33,7 @@ async fn main() -> Result<(), anyhow::Error> {
         space
             .index(1)
             .expect("Index with id 1 exists")
-            .select::<(i64, String)>(None, None, Some(IteratorType::All), vec![])
+            .select::<(i64, String), _>(None, None, Some(IteratorType::All), ())
             .await?
     );
     Ok(())

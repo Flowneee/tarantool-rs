@@ -1,28 +1,25 @@
-// TODO: unify with eval.rs
-
 use std::io::Write;
-
-use rmpv::Value;
 
 use crate::{
     codec::{
         consts::{keys, RequestType},
-        utils::{write_kv_array, write_kv_u32},
+        utils::{write_kv_tuple, write_kv_u32},
     },
     errors::EncodingError,
+    tuple::Tuple,
 };
 
 use super::{Request, INDEX_BASE_VALUE};
 
 #[derive(Clone, Debug)]
-pub(crate) struct Upsert {
+pub(crate) struct Upsert<O, T> {
     pub space_id: u32,
-    pub ops: Vec<Value>,
-    pub tuple: Vec<Value>,
+    pub ops: O,
+    pub tuple: T,
 }
 
-impl Upsert {
-    pub(crate) fn new(space_id: u32, ops: Vec<Value>, tuple: Vec<Value>) -> Self {
+impl<O, T> Upsert<O, T> {
+    pub(crate) fn new(space_id: u32, ops: O, tuple: T) -> Self {
         Self {
             space_id,
             ops,
@@ -31,7 +28,7 @@ impl Upsert {
     }
 }
 
-impl Request for Upsert {
+impl<O: Tuple, T: Tuple> Request for Upsert<O, T> {
     fn request_type() -> RequestType
     where
         Self: Sized,
@@ -45,8 +42,8 @@ impl Request for Upsert {
         rmp::encode::write_map_len(&mut buf, 4)?;
         write_kv_u32(buf, keys::SPACE_ID, self.space_id)?;
         write_kv_u32(buf, keys::INDEX_BASE, INDEX_BASE_VALUE)?;
-        write_kv_array(buf, keys::OPS, &self.ops)?;
-        write_kv_array(buf, keys::TUPLE, &self.tuple)?;
+        write_kv_tuple(buf, keys::OPS, &self.ops)?;
+        write_kv_tuple(buf, keys::TUPLE, &self.tuple)?;
         Ok(())
     }
 }

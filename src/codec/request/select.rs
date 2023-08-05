@@ -1,35 +1,34 @@
 use std::io::Write;
 
-use rmpv::Value;
-
 use crate::{
     codec::{
         consts::{keys, IteratorType, RequestType},
-        utils::{write_kv_array, write_kv_u32},
+        utils::{write_kv_tuple, write_kv_u32},
     },
     errors::EncodingError,
+    tuple::Tuple,
 };
 
 use super::Request;
 
 #[derive(Clone, Debug)]
-pub(crate) struct Select {
+pub(crate) struct Select<T> {
     pub space_id: u32,
     pub index_id: u32,
     pub limit: Option<u32>,
     pub offset: Option<u32>,
     pub iterator: Option<IteratorType>,
-    pub keys: Vec<Value>,
+    pub keys: T,
 }
 
-impl Select {
+impl<T> Select<T> {
     pub fn new(
         space_id: u32,
         index_id: u32,
         limit: Option<u32>,
         offset: Option<u32>,
         iterator: Option<IteratorType>,
-        keys: Vec<Value>,
+        keys: T,
     ) -> Self {
         Self {
             space_id,
@@ -42,7 +41,7 @@ impl Select {
     }
 }
 
-impl Request for Select {
+impl<T: Tuple> Request for Select<T> {
     fn request_type() -> RequestType
     where
         Self: Sized,
@@ -63,7 +62,7 @@ impl Request for Select {
             keys::ITERATOR,
             self.iterator.unwrap_or_default() as u32,
         )?;
-        write_kv_array(buf, keys::KEY, &self.keys)?;
+        write_kv_tuple(buf, keys::KEY, &self.keys)?;
         Ok(())
     }
 }

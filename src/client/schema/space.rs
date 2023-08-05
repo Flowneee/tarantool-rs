@@ -9,7 +9,8 @@ use serde::{de::DeserializeOwned, Deserialize};
 
 use super::{Index, IndexMetadata, OwnedIndex, SchemaEntityKey, SystemSpacesId, PRIMARY_INDEX_ID};
 use crate::{
-    client::ExecutorExt, utils::UniqueIdNameMap, Error, Executor, IteratorType, Result, Transaction,
+    client::ExecutorExt, tuple::Tuple, utils::UniqueIdNameMap, Error, Executor, IteratorType,
+    Result, Transaction,
 };
 
 /// Space metadata with its indices metadata from [system views](https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_space/system_views/).
@@ -50,7 +51,7 @@ impl SpaceMetadata {
                 None,
                 None,
                 None,
-                vec![key.into()],
+                (key.into_value(),),
             )
             .await?
             .into_iter()
@@ -184,15 +185,16 @@ impl<E: Executor> Space<E> {
     /// Call `select` with primary index on current space.
     ///
     /// For details see [`ExecutorExt::select`].
-    pub async fn select<T>(
+    pub async fn select<T, A>(
         &self,
         limit: Option<u32>,
         offset: Option<u32>,
         iterator: Option<IteratorType>,
-        keys: Vec<Value>,
+        keys: A,
     ) -> Result<Vec<T>>
     where
         T: DeserializeOwned,
+        A: Tuple + Send,
     {
         self.executor
             .select(
@@ -210,16 +212,22 @@ impl<E: Executor> Space<E> {
     ///
     /// For details see [`ExecutorExt::insert`].
     // TODO: decode response
-    pub async fn insert(&self, tuple: Vec<Value>) -> Result<()> {
+    pub async fn insert<T>(&self, tuple: T) -> Result<()>
+    where
+        T: Tuple + Send,
+    {
         self.executor.insert(self.metadata.id, tuple).await
     }
 
     /// Call `update` with primary index on current space.
     ///
     /// For details see [`ExecutorExt::update`].
-    // TODO: structured tuple
     // TODO: decode response
-    pub async fn update(&self, keys: Vec<Value>, tuple: Vec<Value>) -> Result<()> {
+    pub async fn update<K, T>(&self, keys: K, tuple: T) -> Result<()>
+    where
+        K: Tuple + Send,
+        T: Tuple + Send,
+    {
         self.executor
             .update(self.metadata.id, PRIMARY_INDEX_ID, keys, tuple)
             .await
@@ -228,28 +236,34 @@ impl<E: Executor> Space<E> {
     /// Call `upsert` on current space.
     ///
     /// For details see [`ExecutorExt::upsert`].
-    // TODO: structured tuple
     // TODO: decode response
-    // TODO: maybe set index base to 1 always?
-    pub async fn upsert(&self, ops: Vec<Value>, tuple: Vec<Value>) -> Result<()> {
+    pub async fn upsert<O, T>(&self, ops: O, tuple: T) -> Result<()>
+    where
+        O: Tuple + Send,
+        T: Tuple + Send,
+    {
         self.executor.upsert(self.metadata.id, ops, tuple).await
     }
 
     /// Call `replace` on current space.
     ///
     /// For details see [`ExecutorExt::replace`].
-    // TODO: structured tuple
     // TODO: decode response
-    pub async fn replace(&self, keys: Vec<Value>) -> Result<()> {
+    pub async fn replace<T>(&self, keys: T) -> Result<()>
+    where
+        T: Tuple + Send,
+    {
         self.executor.replace(self.metadata.id, keys).await
     }
 
     /// Call `delete` with primary index on current space.
     ///
     /// For details see [`ExecutorExt::delete`].
-    // TODO: structured tuple
     // TODO: decode response
-    pub async fn delete(&self, keys: Vec<Value>) -> Result<()> {
+    pub async fn delete<T>(&self, keys: T) -> Result<()>
+    where
+        T: Tuple + Send,
+    {
         self.executor
             .delete(self.metadata.id, PRIMARY_INDEX_ID, keys)
             .await

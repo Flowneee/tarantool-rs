@@ -1,5 +1,3 @@
-// TODO: unify with rollback/commit.rs
-
 use std::io::Write;
 
 use crate::{

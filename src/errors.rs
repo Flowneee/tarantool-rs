@@ -128,6 +128,12 @@ impl From<std::io::Error> for EncodingError {
     }
 }
 
+impl From<rmp_serde::encode::Error> for EncodingError {
+    fn from(value: rmp_serde::encode::Error) -> Self {
+        Self::MessagePack(value.into())
+    }
+}
+
 /// Errors, related to decoding responses.
 #[derive(Clone, Debug, thiserror::Error)]
 #[error("{kind}{}", DecodingErrorLocation::display_in_error(.location))]

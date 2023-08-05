@@ -63,7 +63,7 @@ async fn eval() -> Result<(), anyhow::Error> {
     let container = TarantoolTestContainer::default();
 
     let conn = container.create_conn().await?;
-    let (res,): (u32,) = conn.eval("return ...", vec![42.into()]).await?;
+    let (res,): (u32,) = conn.eval("return ...", (42,)).await?;
     assert_eq!(res, 42);
 
     Ok(())
@@ -74,7 +74,7 @@ async fn call() -> Result<(), anyhow::Error> {
     let container = TarantoolTestContainer::default();
 
     let conn = container.create_conn().await?;
-    let (res,): (String,) = conn.call("station_name", vec![false.into()]).await?;
+    let (res,): (String,) = conn.call("station_name", (false,)).await?;
     assert_eq!(res, "Deep Space 9");
 
     Ok(())
@@ -113,7 +113,7 @@ async fn select_all() -> Result<(), anyhow::Error> {
         .expect("Space 'ds9_crew' found");
 
     let members: Vec<CrewMember> = space
-        .select(None, None, Some(tarantool_rs::IteratorType::All), vec![])
+        .select(None, None, Some(tarantool_rs::IteratorType::All), ())
         .await?;
     assert_eq!(members.len(), 7);
     assert_eq!(
@@ -140,12 +140,7 @@ async fn select_limits() -> Result<(), anyhow::Error> {
         .expect("Space 'ds9_crew' found");
 
     let members: Vec<CrewMember> = space
-        .select(
-            Some(2),
-            Some(2),
-            Some(tarantool_rs::IteratorType::All),
-            vec![],
-        )
+        .select(Some(2), Some(2), Some(tarantool_rs::IteratorType::All), ())
         .await?;
     assert_eq!(members.len(), 2);
     assert_eq!(
@@ -173,7 +168,7 @@ async fn select_by_key() -> Result<(), anyhow::Error> {
     let rank_idx = space.index("idx_rank").expect("Rank index present");
 
     let members: Vec<CrewMember> = rank_idx
-        .select(None, None, None, vec!["Lieutenant Commander".into()])
+        .select(None, None, None, ("Lieutenant Commander",))
         .await?;
     assert_eq!(members.len(), 2);
     assert_eq!(
@@ -199,7 +194,7 @@ async fn timeout() -> Result<(), anyhow::Error> {
         .await?;
 
     assert_matches!(
-        conn.eval::<_, Value>("require('fiber').sleep(1)", vec![])
+        conn.eval::<Value, _, _>("require('fiber').sleep(1)", ())
             .await,
         Err(tarantool_rs::Error::Timeout)
     );

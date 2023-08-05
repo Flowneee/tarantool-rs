@@ -5,7 +5,8 @@ use serde::{de::DeserializeOwned, Deserialize};
 
 use super::{SpaceMetadata, SystemSpacesId, PRIMARY_INDEX_ID};
 use crate::{
-    client::ExecutorExt, utils::UniqueIdName, Executor, IteratorType, Result, Transaction,
+    client::ExecutorExt, tuple::Tuple, utils::UniqueIdName, Executor, IteratorType, Result,
+    Transaction,
 };
 
 /// Index metadata from [system view](https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_space/system_views/).
@@ -44,7 +45,7 @@ impl IndexMetadata {
             None,
             None,
             None,
-            vec![space_id.into()],
+            (space_id,),
         )
         .await
     }
@@ -157,15 +158,16 @@ where
     /// Call `select` on current index.
     ///
     /// For details see [`ExecutorExt::select`].
-    pub async fn select<T>(
+    pub async fn select<T, A>(
         &self,
         limit: Option<u32>,
         offset: Option<u32>,
         iterator: Option<IteratorType>,
-        keys: Vec<Value>,
+        keys: A,
     ) -> Result<Vec<T>>
     where
         T: DeserializeOwned,
+        A: Tuple + Send,
     {
         self.executor
             .select(
@@ -182,9 +184,12 @@ where
     /// Call `update` on current index.
     ///
     /// For details see [`ExecutorExt::update`].
-    // TODO: structured tuple
     // TODO: decode response
-    pub async fn update(&self, keys: Vec<Value>, tuple: Vec<Value>) -> Result<()> {
+    pub async fn update<K, T>(&self, keys: K, tuple: T) -> Result<()>
+    where
+        K: Tuple + Send,
+        T: Tuple + Send,
+    {
         self.executor
             .update(
                 self.space_metadata.borrow().id,
@@ -198,9 +203,11 @@ where
     /// Call `delete` on current index.
     ///
     /// For details see [`ExecutorExt::delete`].
-    // TODO: structured tuple
     // TODO: decode response
-    pub async fn delete(&self, keys: Vec<Value>) -> Result<()> {
+    pub async fn delete<T>(&self, keys: T) -> Result<()>
+    where
+        T: Tuple + Send,
+    {
         self.executor
             .delete(
                 self.space_metadata.borrow().id,

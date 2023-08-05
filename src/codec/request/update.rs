@@ -1,29 +1,27 @@
-// TODO: unify with eval.rs
-
 use std::io::Write;
-
-use rmpv::Value;
 
 use crate::{
     codec::{
         consts::{keys, RequestType},
-        utils::{write_kv_array, write_kv_u32},
+        utils::{write_kv_tuple, write_kv_u32},
     },
     errors::EncodingError,
+    tuple::Tuple,
 };
 
 use super::{Request, INDEX_BASE_VALUE};
 
+// TODO: replace keys with structured operations description
 #[derive(Clone, Debug)]
-pub(crate) struct Update {
+pub(crate) struct Update<K, T> {
     pub space_id: u32,
     pub index_id: u32,
-    pub keys: Vec<Value>,
-    pub tuple: Vec<Value>,
+    pub keys: K,
+    pub tuple: T,
 }
 
-impl Update {
-    pub(crate) fn new(space_id: u32, index_id: u32, keys: Vec<Value>, tuple: Vec<Value>) -> Self {
+impl<K, T> Update<K, T> {
+    pub(crate) fn new(space_id: u32, index_id: u32, keys: K, tuple: T) -> Self {
         Self {
             space_id,
             index_id,
@@ -33,7 +31,7 @@ impl Update {
     }
 }
 
-impl Request for Update {
+impl<K: Tuple, T: Tuple> Request for Update<K, T> {
     fn request_type() -> RequestType
     where
         Self: Sized,
@@ -47,8 +45,8 @@ impl Request for Update {
         write_kv_u32(buf, keys::SPACE_ID, self.space_id)?;
         write_kv_u32(buf, keys::INDEX_ID, self.index_id)?;
         write_kv_u32(buf, keys::INDEX_BASE, INDEX_BASE_VALUE)?;
-        write_kv_array(buf, keys::KEY, &self.keys)?;
-        write_kv_array(buf, keys::TUPLE, &self.tuple)?;
+        write_kv_tuple(buf, keys::KEY, &self.keys)?;
+        write_kv_tuple(buf, keys::TUPLE, &self.tuple)?;
         Ok(())
     }
 }

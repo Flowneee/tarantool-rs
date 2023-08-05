@@ -80,4 +80,8 @@ impl SchemaEntityKey {
             SchemaEntityKey::Id(_) => 0,
         }
     }
+
+    pub(crate) fn into_value(self) -> Value {
+        self.into()
+    }
 }

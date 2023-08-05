@@ -8,15 +8,15 @@ async fn main() -> Result<(), anyhow::Error> {
     connection.clone().ping().await?;
 
     let tx = connection.transaction().await?;
-    let _: Value = tx.eval("box.space.clients:insert{2}", vec![]).await?;
+    let _: Value = tx.eval("box.space.clients:insert{2}", ()).await?;
     tx.rollback().await?;
 
     let tx = connection.transaction().await?;
-    let _: Value = tx.eval("box.space.clients:insert{3}", vec![]).await?;
+    let _: Value = tx.eval("box.space.clients:insert{3}", ()).await?;
     drop(tx);
 
     let tx = connection.transaction().await?;
-    let _: Value = tx.eval("box.space.clients:insert{4}", vec![]).await?;
+    let _: Value = tx.eval("box.space.clients:insert{4}", ()).await?;
     tx.commit().await?;
 
     let _: Vec<u32> = connection
@@ -26,7 +26,7 @@ async fn main() -> Result<(), anyhow::Error> {
             None,
             None,
             Some(tarantool_rs::IteratorType::All),
-            vec![1.into()],
+            (1,),
         )
         .await?;
     Ok(())

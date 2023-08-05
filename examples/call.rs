@@ -17,22 +17,22 @@ async fn main() -> Result<(), anyhow::Error> {
     let conn = Connection::builder().build("127.0.0.1:3301").await?;
 
     let _: Value = conn
-        .eval("function f(arg) return 42, nil end; return", vec![])
+        .eval("function f(arg) return 42, nil end; return", ())
         .await?;
 
-    let resp: Value = conn.call("f", vec![]).await?;
+    let resp: Value = conn.call("f", ()).await?;
     println!("{:?}", resp);
 
-    let resp: (Value, Value) = conn.call("f", vec![]).await?;
+    let resp: (Value, Value) = conn.call("f", (false,)).await?;
     println!("{:?}", resp);
 
-    let resp: Vec<Value> = conn.call("f", vec![]).await?;
+    let resp: Vec<Value> = conn.call("f", ()).await?;
     println!("{:?}", resp);
 
-    let resp: (u64, Option<String>) = conn.call("f", vec![]).await?;
+    let resp: (u64, Option<String>) = conn.call("f", ()).await?;
     println!("{:?}", resp);
 
-    let resp: Response = conn.call("f", vec![]).await?;
+    let resp: Response = conn.call("f", ()).await?;
     println!("{:?}", resp);
 
     Ok(())

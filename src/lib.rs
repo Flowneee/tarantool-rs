@@ -35,22 +35,22 @@
 //! let conn = Connection::builder().build("127.0.0.1:3301").await?;
 //!
 //! // Execute Lua code with one argument, returning this argument
-//! let (number,): (u64,) = conn.eval("return ...", vec![42.into()]).await?;
+//! let (number,): (u64,) = conn.eval("return ...", (42, )).await?;
 //! assert_eq!(number, 42);
 //!
 //! // Call Lua function 'rand' (assuming it exists and return 42)
-//! let (number,): (u64,) = conn.call("rand", vec![]).await?;
+//! let (number,): (u64,) = conn.call("rand", ()).await?;
 //! assert_eq!(number, 42);
 //!
 //! // Get 'clients' space with 2 fields - 'id' and 'name'
 //! let clients_space = conn.space("clients").await?.expect("Space exists");
 //!
 //! // Insert tuple into 'clients' space
-//! clients_space.insert(vec![1.into(), "John Doe".into()]).await?;
+//! clients_space.insert((1, "John Doe")).await?;
 //!
 //! // Select tuples from clients space using primary index
 //! let clients: Vec<(i64, String)> = clients_space
-//!     .select(None, None, None, vec![1.into()])
+//!     .select(None, None, None, (1, ))
 //!     .await?;
 //! # Ok(())
 //! # }
@@ -79,19 +79,19 @@
 //!   deserialized into _any_ type, implementing `DeserializeOwned`.
 //!
 //! ```ignore
-//! let resp: Value = conn.call("rand", vec![]).await?;
+//! let resp: Value = conn.call("rand", ()).await?;
 //! println!("{:?}", resp); // Array([Integer(PosInt(42)), Nil])
 //!
-//! let resp: (Value, Value) = conn.call("rand", vec![]).await?;
+//! let resp: (Value, Value) = conn.call("rand", ()).await?;
 //! println!("{:?}", resp); // (Integer(PosInt(42)), Nil)
 //!
-//! let resp: Vec<Value> = conn.call("rand", vec![]).await?;
+//! let resp: Vec<Value> = conn.call("rand", ()).await?;
 //! println!("{:?}", resp); // [Integer(PosInt(42)), Nil]
 //!
-//! let resp: (u64, Option<String>) = conn.call("rand", vec![]).await?;
+//! let resp: (u64, Option<String>) = conn.call("rand", ()).await?;
 //! println!("{:?}", resp); // (42, None)
 //!
-//! let resp: Response = conn.call("rand", vec![]).await?;
+//! let resp: Response = conn.call("rand", ()).await?;
 //! println!("{:?}", resp); // Response { first: 42, second: None }
 //! ```
 //!
@@ -124,6 +124,7 @@ pub use self::{
     client::*,
     codec::consts::{IteratorType, TransactionIsolationLevel},
     errors::Error,
+    tuple::Tuple,
 };
 
 pub mod errors;
@@ -132,6 +133,7 @@ mod builder;
 mod client;
 mod codec;
 mod transport;
+mod tuple;
 mod utils;
 
 /// Alias for [`std::result::Result<T, crate::Error>`].
