@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## [0.0.5] - 2023-08-05
 ### Added
  - `into_space` method to `ExecutorExt` trait, wich return `Space` with underlying `Executor`;
  - `.commit()` and `.rollback()` methods to `Space<Transaction>` and `OwnedIndex<Transaction>`;
