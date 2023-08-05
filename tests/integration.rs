@@ -83,7 +83,7 @@ async fn retrieve_schema() -> Result<(), anyhow::Error> {
 
     let conn = container.create_conn().await?;
     let space = conn
-        .get_space("ds9_crew")
+        .space("ds9_crew")
         .await?
         .expect("Space 'ds9_crew' found");
     assert_eq!(
@@ -105,7 +105,7 @@ async fn select_all() -> Result<(), anyhow::Error> {
 
     let conn: Connection = container.create_conn().await?;
     let space = conn
-        .get_space("ds9_crew")
+        .space("ds9_crew")
         .await?
         .expect("Space 'ds9_crew' found");
 
@@ -132,7 +132,7 @@ async fn select_limits() -> Result<(), anyhow::Error> {
 
     let conn: Connection = container.create_conn().await?;
     let space = conn
-        .get_space("ds9_crew")
+        .space("ds9_crew")
         .await?
         .expect("Space 'ds9_crew' found");
 
@@ -164,7 +164,7 @@ async fn select_by_key() -> Result<(), anyhow::Error> {
 
     let conn: Connection = container.create_conn().await?;
     let space = conn
-        .get_space("ds9_crew")
+        .space("ds9_crew")
         .await?
         .expect("Space 'ds9_crew' found");
     let rank_idx = space.index("idx_rank").expect("Rank index present");

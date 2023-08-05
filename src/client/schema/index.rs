@@ -4,7 +4,9 @@ use rmpv::Value;
 use serde::{de::DeserializeOwned, Deserialize};
 
 use super::{SpaceMetadata, SystemSpacesId, PRIMARY_INDEX_ID};
-use crate::{client::ExecutorExt, utils::UniqueIdName, Executor, IteratorType, Result};
+use crate::{
+    client::ExecutorExt, utils::UniqueIdName, Executor, IteratorType, Result, Transaction,
+};
 
 /// Index metadata from [system view](https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_space/system_views/).
 #[derive(Clone, Deserialize)]
@@ -206,5 +208,17 @@ where
                 keys,
             )
             .await
+    }
+}
+
+impl OwnedIndex<Transaction> {
+    /// Commit inner tranasction.
+    pub async fn commit(self) -> Result<()> {
+        self.executor.commit().await
+    }
+
+    /// Rollback inner tranasction.
+    pub async fn rollback(self) -> Result<()> {
+        self.executor.rollback().await
     }
 }

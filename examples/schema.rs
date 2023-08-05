@@ -1,5 +1,5 @@
 use rmpv::Value;
-use tarantool_rs::{Connection, IteratorType};
+use tarantool_rs::{Connection, ExecutorExt, IteratorType};
 use tracing::info;
 
 #[tokio::main]
@@ -8,7 +8,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let conn = Connection::builder().build("127.0.0.1:3301").await?;
 
-    let data = conn.get_space("clients").await?;
+    let data = conn.space("clients").await?;
     info!("{:?}", data);
     let space = data.unwrap();
     info!(

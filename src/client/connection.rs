@@ -14,10 +14,7 @@ use tracing::debug;
 
 use crate::{
     builder::ConnectionBuilder,
-    client::{
-        schema::{SchemaEntityKey, Space},
-        Executor, Stream, Transaction, TransactionBuilder,
-    },
+    client::{Executor, Stream, Transaction, TransactionBuilder},
     codec::{
         consts::TransactionIsolationLevel,
         request::{EncodedRequest, Id, Request},
@@ -128,13 +125,6 @@ impl Connection {
     /// Create transaction.
     pub(crate) async fn transaction(&self) -> Result<Transaction> {
         self.transaction_builder().begin().await
-    }
-
-    /// Find and load space by key.
-    ///
-    /// Can be called with space's index (if passed unsigned integer) or name (if passed `&str`).
-    pub async fn get_space(&self, key: impl Into<SchemaEntityKey>) -> Result<Option<Space<Self>>> {
-        Space::load(self.clone(), key.into()).await
     }
 }
 

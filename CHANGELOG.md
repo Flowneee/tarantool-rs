@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+### Added
+ - `into_space` method to `ExecutorExt` trait, wich return `Space` with underlying `Executor`;
+ - `.commit()` and `.rollback()` methods to `Space<Transaction>` and `OwnedIndex<Transaction>`.
+
+### Changed
+ - `get_space` moved to `ExecutorExt` trait and renamed to `space`, also now returning reference to underlying `Execitor`.
+
+
 ## [0.0.4] - 2023-08-01
 ### Added
  - `Index` API, which simplify making `select` and CRUD requsts on specific index.

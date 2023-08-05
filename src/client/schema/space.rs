@@ -8,7 +8,9 @@ use rmpv::Value;
 use serde::{de::DeserializeOwned, Deserialize};
 
 use super::{Index, IndexMetadata, OwnedIndex, SchemaEntityKey, SystemSpacesId, PRIMARY_INDEX_ID};
-use crate::{client::ExecutorExt, utils::UniqueIdNameMap, Error, Executor, IteratorType, Result};
+use crate::{
+    client::ExecutorExt, utils::UniqueIdNameMap, Error, Executor, IteratorType, Result, Transaction,
+};
 
 /// Space metadata with its indices metadata from [system views](https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_space/system_views/).
 #[derive(Clone, Deserialize)]
@@ -251,6 +253,18 @@ impl<E: Executor> Space<E> {
         self.executor
             .delete(self.metadata.id, PRIMARY_INDEX_ID, keys)
             .await
+    }
+}
+
+impl Space<Transaction> {
+    /// Commit inner tranasction.
+    pub async fn commit(self) -> Result<()> {
+        self.executor.commit().await
+    }
+
+    /// Rollback inner tranasction.
+    pub async fn rollback(self) -> Result<()> {
+        self.executor.rollback().await
     }
 }
 

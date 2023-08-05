@@ -43,7 +43,7 @@
 //! assert_eq!(number, 42);
 //!
 //! // Get 'clients' space with 2 fields - 'id' and 'name'
-//! let clients_space = conn.get_space("clients").await?.expect("Space exists");
+//! let clients_space = conn.space("clients").await?.expect("Space exists");
 //!
 //! // Insert tuple into 'clients' space
 //! clients_space.insert(vec![1.into(), "John Doe".into()]).await?;

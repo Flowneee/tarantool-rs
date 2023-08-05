@@ -10,6 +10,7 @@ use crate::{
     codec::request::{
         Call, Delete, EncodedRequest, Eval, Insert, Ping, Replace, Request, Select, Update, Upsert,
     },
+    schema::{SchemaEntityKey, Space},
     utils::extract_and_deserialize_iproto_data,
     IteratorType, Result,
 };
@@ -128,6 +129,32 @@ pub trait ExecutorExt: Executor {
             .await?;
         Ok(())
     }
+
+    /// Find and load space by key.
+    ///
+    /// Can be called with space's index (if passed unsigned integer) or name (if passed `&str`).
+    ///
+    /// Returned [`Space`] object contains reference to current executor.
+    async fn space<K>(&self, key: K) -> Result<Option<Space<&Self>>>
+    where
+        Self: Sized + Send,
+        K: Into<SchemaEntityKey> + Send,
+    {
+        Space::load(self, key.into()).await
+    }
+
+    /// Find and load space by key, moving current executor into [`Space`].
+    ///
+    /// Can be called with space's index (if passed unsigned integer) or name (if passed `&str`).
+    ///
+    /// Returned [`Space`] object contains current executor.
+    async fn into_space<K>(self, key: K) -> Result<Option<Space<Self>>>
+    where
+        Self: Sized + Send,
+        K: Into<SchemaEntityKey> + Send,
+    {
+        Space::load(self, key.into()).await
+    }
 }
 
 #[async_trait]
@@ -138,5 +165,46 @@ impl<E: Executor + ?Sized> ExecutorExt for E {
     {
         let req = EncodedRequest::new(body, None);
         async move { (*self).send_encoded_request(req?).await }.boxed()
+    }
+}
+
+#[cfg(test)]
+mod ui {
+    #![allow(unused)]
+
+    use crate::{Connection, Transaction};
+
+    use super::*;
+
+    fn executor_ext_on_connection_ref() {
+        async fn f(conn: &Connection) -> Space<&Connection> {
+            conn.space("space").await.unwrap().unwrap()
+        }
+    }
+
+    fn executor_ext_on_connection() {
+        async fn f(conn: Connection) -> Space<Connection> {
+            conn.into_space("space").await.unwrap().unwrap()
+        }
+    }
+
+    fn executor_ext_on_connection_cloned() {
+        async fn f(conn: &Connection) -> Space<Connection> {
+            conn.clone().into_space("space").await.unwrap().unwrap()
+        }
+    }
+
+    fn executor_ext_on_transaction_ref() {
+        async fn f(tx: &Transaction) -> Space<&Transaction> {
+            tx.space("space").await.unwrap().unwrap()
+        }
+    }
+
+    fn executor_ext_on_transaction() {
+        async fn f(tx: Transaction) {
+            let space_tx: Space<Transaction> = tx.into_space("space").await.unwrap().unwrap();
+            space_tx.delete(vec![1.into()]).await.unwrap();
+            space_tx.commit().await.unwrap();
+        }
     }
 }
