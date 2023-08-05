@@ -8,8 +8,9 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::{future::BoxFuture, TryFutureExt};
+use futures::TryFutureExt;
 use rmpv::Value;
+use tokio::time::timeout;
 use tracing::debug;
 
 use crate::{
@@ -21,7 +22,7 @@ use crate::{
         response::ResponseBody,
     },
     transport::DispatcherSender,
-    Result,
+    ExecutorExt, Result,
 };
 
 /// Connection to Tarantool instance.
@@ -40,6 +41,7 @@ struct ConnectionInner {
     dispatcher_sender: DispatcherSender,
     // TODO: change how stream id assigned when dispathcer have more than one connection
     next_stream_id: AtomicU32,
+    timeout: Option<Duration>,
     transaction_timeout_secs: Option<f64>,
     transaction_isolation_level: TransactionIsolationLevel,
     async_rt_handle: tokio::runtime::Handle,
@@ -53,6 +55,7 @@ impl Connection {
 
     pub(crate) fn new(
         dispatcher_sender: DispatcherSender,
+        timeout: Option<Duration>,
         transaction_timeout: Option<Duration>,
         transaction_isolation_level: TransactionIsolationLevel,
     ) -> Self {
@@ -61,6 +64,7 @@ impl Connection {
                 dispatcher_sender,
                 // TODO: check if 0 is valid value
                 next_stream_id: AtomicU32::new(1),
+                timeout,
                 transaction_timeout_secs: transaction_timeout.as_ref().map(Duration::as_secs_f64),
                 transaction_isolation_level,
                 // NOTE: Safety: this method can be called only in async tokio context (because it
@@ -68,15 +72,6 @@ impl Connection {
                 async_rt_handle: tokio::runtime::Handle::current(),
             }),
         }
-    }
-
-    pub(crate) fn encode_and_send_request(
-        &self,
-        body: impl Request,
-        stream_id: Option<u32>,
-    ) -> BoxFuture<Result<Value>> {
-        let req = EncodedRequest::new(body, stream_id);
-        Box::pin(async move { self.send_encoded_request(req?).await })
     }
 
     /// Synchronously send request to channel and drop response.
@@ -106,7 +101,7 @@ impl Connection {
     // TODO: return response from server
     /// Send ID request ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#iproto-id-0x49)).
     pub(crate) async fn id(&self, features: Id) -> Result<()> {
-        self.encode_and_send_request(features, None).await.map(drop)
+        self.send_request(features).await.map(drop)
     }
 
     pub(crate) fn stream(&self) -> Stream {
@@ -131,7 +126,11 @@ impl Connection {
 #[async_trait]
 impl Executor for Connection {
     async fn send_encoded_request(&self, request: EncodedRequest) -> Result<Value> {
-        let resp = self.inner.dispatcher_sender.send(request).await?;
+        let fut = self.inner.dispatcher_sender.send(request);
+        let resp = match self.inner.timeout {
+            Some(x) => timeout(x, fut).await??,
+            None => fut.await?,
+        };
         match resp.body {
             ResponseBody::Ok(x) => Ok(x),
             ResponseBody::Error(x) => Err(x.into()),

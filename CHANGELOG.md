@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Added
  - `into_space` method to `ExecutorExt` trait, wich return `Space` with underlying `Executor`;
- - `.commit()` and `.rollback()` methods to `Space<Transaction>` and `OwnedIndex<Transaction>`.
+ - `.commit()` and `.rollback()` methods to `Space<Transaction>` and `OwnedIndex<Transaction>`;
+ - `timeout` parameter to `ConnectionBuilder`, allowing to set timeout for all requests in this `Connection`.
 
 ### Changed
  - `get_space` moved to `ExecutorExt` trait and renamed to `space`, also now returning reference to underlying `Execitor`.

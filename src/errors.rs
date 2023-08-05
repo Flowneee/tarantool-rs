@@ -6,6 +6,7 @@ use rmp::{
     decode::{MarkerReadError, NumValueReadError, ValueReadError},
     encode::{RmpWriteErr, ValueWriteError},
 };
+use tokio::time::error::Elapsed;
 
 /// Error returned by Tarantool in response to a request.
 #[derive(Clone, Debug, thiserror::Error)]
@@ -94,6 +95,12 @@ impl From<CodecEncodeError> for Error {
             CodecEncodeError::Io(x) => x.into(),
             CodecEncodeError::Encode(x) => x.into(),
         }
+    }
+}
+
+impl From<Elapsed> for Error {
+    fn from(_: Elapsed) -> Self {
+        Self::Timeout
     }
 }
 

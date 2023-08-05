@@ -58,6 +58,7 @@ impl ReconnectInterval {
 pub struct ConnectionBuilder {
     user: Option<String>,
     password: Option<String>,
+    timeout: Option<Duration>,
     transaction_timeout: Option<Duration>,
     transaction_isolation_level: TransactionIsolationLevel,
     connect_timeout: Option<Duration>,
@@ -67,11 +68,12 @@ pub struct ConnectionBuilder {
 impl Default for ConnectionBuilder {
     fn default() -> Self {
         Self {
-            user: Default::default(),
-            password: Default::default(),
-            transaction_timeout: Default::default(),
+            user: None,
+            password: None,
+            timeout: None,
+            transaction_timeout: None,
             transaction_isolation_level: Default::default(),
-            connect_timeout: Default::default(),
+            connect_timeout: None,
             reconnect_interval: Some(ReconnectInterval::default()),
         }
     }
@@ -87,7 +89,7 @@ impl ConnectionBuilder {
             addr,
             self.user.as_deref(),
             self.password.as_deref(),
-            self.connect_timeout,
+            self.timeout,
             self.reconnect_interval.clone(),
         )
         .await?;
@@ -96,6 +98,7 @@ impl ConnectionBuilder {
         tokio::spawn(dispatcher.run());
         let conn = Connection::new(
             disaptcher_sender,
+            self.timeout,
             self.transaction_timeout,
             self.transaction_isolation_level,
         );
@@ -121,6 +124,14 @@ impl ConnectionBuilder {
     pub fn auth<'a>(&mut self, user: &str, password: impl Into<Option<&'a str>>) -> &mut Self {
         self.user = Some(user.into());
         self.password = password.into().map(Into::into);
+        self
+    }
+
+    /// Sets timeout for requests.
+    ///
+    /// By default disabled.
+    pub fn timeout(&mut self, timeout: impl Into<Option<Duration>>) -> &mut Self {
+        self.timeout = timeout.into();
         self
     }
 

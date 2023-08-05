@@ -1,7 +1,10 @@
 #[macro_use]
 extern crate rental;
 
+use std::time::Duration;
+
 use assert_matches::assert_matches;
+use rmpv::Value;
 use serde::Deserialize;
 use tarantool_rs::{errors::Error, Connection, ExecutorExt};
 
@@ -181,6 +184,24 @@ async fn select_by_key() -> Result<(), anyhow::Error> {
             rank: "Lieutenant Commander".into(),
             occupation: "Science officer".into()
         }
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn timeout() -> Result<(), anyhow::Error> {
+    let container = TarantoolTestContainer::default();
+
+    let conn = Connection::builder()
+        .timeout(Duration::from_millis(100))
+        .build(format!("127.0.0.1:{}", container.connect_port()))
+        .await?;
+
+    assert_matches!(
+        conn.eval::<_, Value>("require('fiber').sleep(1)", vec![])
+            .await,
+        Err(tarantool_rs::Error::Timeout)
     );
 
     Ok(())
