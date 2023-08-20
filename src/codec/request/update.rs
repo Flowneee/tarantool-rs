@@ -21,12 +21,12 @@ pub(crate) struct Update<K, T> {
 }
 
 impl<K, T> Update<K, T> {
-    pub(crate) fn new(space_id: u32, index_id: u32, keys: K, tuple: T) -> Self {
+    pub(crate) fn new(space_id: u32, index_id: u32, keys: K, ops: T) -> Self {
         Self {
             space_id,
             index_id,
             keys,
-            tuple,
+            tuple: ops,
         }
     }
 }

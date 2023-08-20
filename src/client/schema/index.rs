@@ -185,17 +185,17 @@ where
     ///
     /// For details see [`ExecutorExt::update`].
     // TODO: decode response
-    pub async fn update<K, T>(&self, keys: K, tuple: T) -> Result<()>
+    pub async fn update<K, O>(&self, keys: K, ops: O) -> Result<Value>
     where
         K: Tuple + Send,
-        T: Tuple + Send,
+        O: Tuple + Send,
     {
         self.executor
             .update(
                 self.space_metadata.borrow().id,
                 self.metadata.borrow().index_id,
                 keys,
-                tuple,
+                ops,
             )
             .await
     }

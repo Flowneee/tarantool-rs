@@ -212,7 +212,7 @@ impl<E: Executor> Space<E> {
     ///
     /// For details see [`ExecutorExt::insert`].
     // TODO: decode response
-    pub async fn insert<T>(&self, tuple: T) -> Result<()>
+    pub async fn insert<T>(&self, tuple: T) -> Result<Value>
     where
         T: Tuple + Send,
     {
@@ -223,13 +223,13 @@ impl<E: Executor> Space<E> {
     ///
     /// For details see [`ExecutorExt::update`].
     // TODO: decode response
-    pub async fn update<K, T>(&self, keys: K, tuple: T) -> Result<()>
+    pub async fn update<K, O>(&self, keys: K, ops: O) -> Result<Value>
     where
         K: Tuple + Send,
-        T: Tuple + Send,
+        O: Tuple + Send,
     {
         self.executor
-            .update(self.metadata.id, PRIMARY_INDEX_ID, keys, tuple)
+            .update(self.metadata.id, PRIMARY_INDEX_ID, keys, ops)
             .await
     }
 
@@ -237,23 +237,23 @@ impl<E: Executor> Space<E> {
     ///
     /// For details see [`ExecutorExt::upsert`].
     // TODO: decode response
-    pub async fn upsert<O, T>(&self, ops: O, tuple: T) -> Result<()>
+    pub async fn upsert<T, O>(&self, tuple: T, ops: O) -> Result<()>
     where
-        O: Tuple + Send,
         T: Tuple + Send,
+        O: Tuple + Send,
     {
-        self.executor.upsert(self.metadata.id, ops, tuple).await
+        self.executor.upsert(self.metadata.id, tuple, ops).await
     }
 
     /// Call `replace` on current space.
     ///
     /// For details see [`ExecutorExt::replace`].
     // TODO: decode response
-    pub async fn replace<T>(&self, keys: T) -> Result<()>
+    pub async fn replace<T>(&self, tuple: T) -> Result<()>
     where
         T: Tuple + Send,
     {
-        self.executor.replace(self.metadata.id, keys).await
+        self.executor.replace(self.metadata.id, tuple).await
     }
 
     /// Call `delete` with primary index on current space.

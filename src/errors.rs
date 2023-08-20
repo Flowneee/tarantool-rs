@@ -138,6 +138,7 @@ impl From<rmp_serde::encode::Error> for EncodingError {
 #[derive(Clone, Debug, thiserror::Error)]
 #[error("{kind}{}", DecodingErrorLocation::display_in_error(.location))]
 pub struct DecodingError {
+    #[source]
     kind: Arc<DecodingErrorDetails>,
     location: Option<DecodingErrorLocation>,
 }

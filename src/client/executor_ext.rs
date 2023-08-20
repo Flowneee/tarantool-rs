@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use async_trait::async_trait;
-use futures::{future::BoxFuture, FutureExt};
+use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use rmpv::Value;
 use serde::de::DeserializeOwned;
 
@@ -85,33 +85,32 @@ pub trait ExecutorExt: Executor {
 
     // TODO: decode response
     /// Insert tuple.
-    async fn insert<T>(&self, space_id: u32, tuple: T) -> Result<()>
+    async fn insert<T>(&self, space_id: u32, tuple: T) -> Result<Value>
     where
         T: Tuple + Send,
     {
-        let _ = self.send_request(Insert::new(space_id, tuple)).await?;
-        Ok(())
+        let resp = self.send_request(Insert::new(space_id, tuple)).await?;
+        Ok(resp)
     }
 
     // TODO: decode response
     /// Update tuple.
-    async fn update<K, T>(&self, space_id: u32, index_id: u32, keys: K, tuple: T) -> Result<()>
+    async fn update<K, O>(&self, space_id: u32, index_id: u32, keys: K, ops: O) -> Result<Value>
     where
         K: Tuple + Send,
-        T: Tuple + Send,
+        O: Tuple + Send,
     {
-        let _ = self
-            .send_request(Update::new(space_id, index_id, keys, tuple))
-            .await?;
-        Ok(())
+        self.send_request(Update::new(space_id, index_id, keys, ops))
+            .err_into()
+            .await
     }
 
     // TODO: decode response
     /// Update or insert tuple.
-    async fn upsert<O, T>(&self, space_id: u32, ops: O, tuple: T) -> Result<()>
+    async fn upsert<T, O>(&self, space_id: u32, tuple: T, ops: O) -> Result<()>
     where
-        O: Tuple + Send,
         T: Tuple + Send,
+        O: Tuple + Send,
     {
         let _ = self.send_request(Upsert::new(space_id, ops, tuple)).await?;
         Ok(())
@@ -121,11 +120,11 @@ pub trait ExecutorExt: Executor {
     // TODO: decode response
     /// Insert a tuple into a space. If a tuple with the same primary key already exists,
     /// replaces the existing tuple with a new one.
-    async fn replace<T>(&self, space_id: u32, keys: T) -> Result<()>
+    async fn replace<T>(&self, space_id: u32, tuple: T) -> Result<()>
     where
         T: Tuple + Send,
     {
-        let _ = self.send_request(Replace::new(space_id, keys)).await?;
+        let _ = self.send_request(Replace::new(space_id, tuple)).await?;
         Ok(())
     }
 
