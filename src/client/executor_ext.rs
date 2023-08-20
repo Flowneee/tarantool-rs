@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use rmpv::Value;
@@ -41,10 +39,10 @@ pub trait ExecutorExt: Executor {
     async fn eval<A, I>(&self, expr: I, args: A) -> Result<TupleResponse>
     where
         A: Tuple + Send,
-        I: Into<Cow<'static, str>> + Send,
+        I: AsRef<str> + Send + Sync,
     {
         Ok(TupleResponse(
-            self.send_request(Eval::new(expr, args)).await?,
+            self.send_request(Eval::new(expr.as_ref(), args)).await?,
         ))
     }
 
@@ -54,10 +52,11 @@ pub trait ExecutorExt: Executor {
     async fn call<A, I>(&self, function_name: I, args: A) -> Result<TupleResponse>
     where
         A: Tuple + Send,
-        I: Into<Cow<'static, str>> + Send,
+        I: AsRef<str> + Send + Sync,
     {
         Ok(TupleResponse(
-            self.send_request(Call::new(function_name, args)).await?,
+            self.send_request(Call::new(function_name.as_ref(), args))
+                .await?,
         ))
     }
 
