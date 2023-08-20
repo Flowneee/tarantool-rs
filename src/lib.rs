@@ -35,11 +35,11 @@
 //! let conn = Connection::builder().build("127.0.0.1:3301").await?;
 //!
 //! // Execute Lua code with one argument, returning this argument
-//! let (number,): (u64,) = conn.eval("return ...", (42, )).await?;
+//! let number: u64 = conn.eval("return ...", (42, )).await?.decode_result()?;
 //! assert_eq!(number, 42);
 //!
 //! // Call Lua function 'rand' (assuming it exists and return 42)
-//! let (number,): (u64,) = conn.call("rand", ()).await?;
+//! let number: u64 = conn.call("rand", ()).await?.decode_first()?;
 //! assert_eq!(number, 42);
 //!
 //! // Get 'clients' space with 2 fields - 'id' and 'name'
@@ -55,47 +55,6 @@
 //! # Ok(())
 //! # }
 //! ````
-//!
-//! ## Deserializing Lua responses in `call` and `eval`
-//!
-//! [`ExecutorExt::eval`] and [`ExecutorExt::call`] (on Lua functions) will always return tuple
-//! of a fixed size (size is depend on `return` tatement in your code). For example function
-//!
-//! ```lua
-//! function rand()
-//!     return 42, nil
-//! end
-//! ````
-//!
-//! will always return 2 elements: integer and null. it can be deserialized into multiple different
-//! types:
-//!
-//! * `Value` - this is most general way, which (converted to JSON) would looks like `[42, null]`;
-//! * `(Value, Value)` - less general way, this will fail if function return tuple with less or more elements;
-//! * `Vec<Value>` - same as before, but without length constraint (i.e. can be deserialized from any tuple);
-//! * `(u64, Option<Value>)` - here type of the first argument is speified, but second is not `rmpv::Value as second`;
-//! * `(u64, Option<String>)` - same as before, but type of second element is specified.
-//! * `struct Response { first: u64, second: Option<Value> }` - since response is just a tuple, it can be
-//!   deserialized into _any_ type, implementing `DeserializeOwned`.
-//!
-//! ```ignore
-//! let resp: Value = conn.call("rand", ()).await?;
-//! println!("{:?}", resp); // Array([Integer(PosInt(42)), Nil])
-//!
-//! let resp: (Value, Value) = conn.call("rand", ()).await?;
-//! println!("{:?}", resp); // (Integer(PosInt(42)), Nil)
-//!
-//! let resp: Vec<Value> = conn.call("rand", ()).await?;
-//! println!("{:?}", resp); // [Integer(PosInt(42)), Nil]
-//!
-//! let resp: (u64, Option<String>) = conn.call("rand", ()).await?;
-//! println!("{:?}", resp); // (42, None)
-//!
-//! let resp: Response = conn.call("rand", ()).await?;
-//! println!("{:?}", resp); // Response { first: 42, second: None }
-//! ```
-//!
-//! NOTE: If Lua code return nothing (empty tuple), currently you have to use `Value` as return type.
 //!
 //! ## Features
 //!

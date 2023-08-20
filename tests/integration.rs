@@ -4,7 +4,6 @@ extern crate rental;
 use std::time::Duration;
 
 use assert_matches::assert_matches;
-use rmpv::Value;
 use serde::Deserialize;
 use tarantool_rs::{errors::Error, Connection, ExecutorExt};
 
@@ -63,7 +62,7 @@ async fn eval() -> Result<(), anyhow::Error> {
     let container = TarantoolTestContainer::default();
 
     let conn = container.create_conn().await?;
-    let (res,): (u32,) = conn.eval("return ...", (42,)).await?;
+    let res: u32 = conn.eval("return ...", (42,)).await?.decode_result()?;
     assert_eq!(res, 42);
 
     Ok(())
@@ -74,7 +73,7 @@ async fn call() -> Result<(), anyhow::Error> {
     let container = TarantoolTestContainer::default();
 
     let conn = container.create_conn().await?;
-    let (res,): (String,) = conn.call("station_name", (false,)).await?;
+    let res: String = conn.call("station_name", (false,)).await?.decode_first()?;
     assert_eq!(res, "Deep Space 9");
 
     Ok(())
@@ -194,8 +193,7 @@ async fn timeout() -> Result<(), anyhow::Error> {
         .await?;
 
     assert_matches!(
-        conn.eval::<Value, _, _>("require('fiber').sleep(1)", ())
-            .await,
+        conn.eval("require('fiber').sleep(1)", ()).await,
         Err(tarantool_rs::Error::Timeout)
     );
 

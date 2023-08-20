@@ -16,23 +16,28 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let conn = Connection::builder().build("127.0.0.1:3301").await?;
 
-    let _: Value = conn
+    let _ = conn
         .eval("function f(arg) return 42, nil end; return", ())
         .await?;
 
-    let resp: Value = conn.call("f", ()).await?;
+    // Drop call result
+    let _ = conn.call("f", ()).await?;
+
+    // Decode returned tuple entirely
+    let resp: (u64, Value) = conn.call("f", ()).await?.decode_full()?;
     println!("{:?}", resp);
 
-    let resp: (Value, Value) = conn.call("f", (false,)).await?;
+    // Decode first element
+    let resp: u64 = conn.call("f", ()).await?.decode_first()?;
     println!("{:?}", resp);
 
-    let resp: Vec<Value> = conn.call("f", ()).await?;
+    // Decode returned tuple as result. Since second element is null,
+    // decode to Ok(u64)
+    let resp: u64 = conn.call("f", ()).await?.decode_result()?;
     println!("{:?}", resp);
 
-    let resp: (u64, Option<String>) = conn.call("f", ()).await?;
-    println!("{:?}", resp);
-
-    let resp: Response = conn.call("f", ()).await?;
+    // Decode returned tuple entirely into type
+    let resp: Response = conn.call("f", ()).await?.decode_full()?;
     println!("{:?}", resp);
 
     Ok(())

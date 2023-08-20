@@ -1,4 +1,4 @@
-use tarantool_rs::{Connection, Executor, ExecutorExt, Value};
+use tarantool_rs::{Connection, Executor, ExecutorExt};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -8,15 +8,15 @@ async fn main() -> Result<(), anyhow::Error> {
     connection.clone().ping().await?;
 
     let tx = connection.transaction().await?;
-    let _: Value = tx.eval("box.space.clients:insert{2}", ()).await?;
+    let _ = tx.eval("box.space.clients:insert{2}", ()).await?;
     tx.rollback().await?;
 
     let tx = connection.transaction().await?;
-    let _: Value = tx.eval("box.space.clients:insert{3}", ()).await?;
+    let _ = tx.eval("box.space.clients:insert{3}", ()).await?;
     drop(tx);
 
     let tx = connection.transaction().await?;
-    let _: Value = tx.eval("box.space.clients:insert{4}", ()).await?;
+    let _ = tx.eval("box.space.clients:insert{4}", ()).await?;
     tx.commit().await?;
 
     let _: Vec<u32> = connection

@@ -48,7 +48,11 @@ async fn main() -> std::result::Result<(), anyhow::Error> {
 
 async fn process_input(conn: &Connection, line: String) {
     let query = format!("return ({})", line);
-    match conn.eval::<serde_json::Value, _, _>(query, ()).await {
+    match conn
+        .eval::<_, _>(query, ())
+        .await
+        .and_then(|resp| Ok(resp.decode_full()?))
+    {
         Ok(x) => println!(
             "Result: {}",
             serde_json::to_string(&x).expect("All MessagePack values should be valid for JSON")

@@ -13,7 +13,7 @@ use crate::{
     schema::{SchemaEntityKey, Space},
     tuple::Tuple,
     utils::extract_and_deserialize_iproto_data,
-    IteratorType, Result,
+    IteratorType, Result, TupleResponse,
 };
 
 /// Helper trait around [`Executor`] trait, which allows to send specific requests
@@ -38,27 +38,27 @@ pub trait ExecutorExt: Executor {
     /// Evaluate Lua expression.
     ///
     /// Check [docs][crate#deserializing-lua-responses-in-call-and-eval] on how to deserialize response.
-    async fn eval<T, A, I>(&self, expr: I, args: A) -> Result<T>
+    async fn eval<A, I>(&self, expr: I, args: A) -> Result<TupleResponse>
     where
-        T: DeserializeOwned,
         A: Tuple + Send,
         I: Into<Cow<'static, str>> + Send,
     {
-        let body = self.send_request(Eval::new(expr, args)).await?;
-        extract_and_deserialize_iproto_data(body).map_err(Into::into)
+        Ok(TupleResponse(
+            self.send_request(Eval::new(expr, args)).await?,
+        ))
     }
 
     /// Remotely call function in Tarantool.
     ///
     /// Check [docs][crate#deserializing-lua-responses-in-call-and-eval] on how to deserialize response.
-    async fn call<T, A, I>(&self, function_name: I, args: A) -> Result<T>
+    async fn call<A, I>(&self, function_name: I, args: A) -> Result<TupleResponse>
     where
-        T: DeserializeOwned,
         A: Tuple + Send,
         I: Into<Cow<'static, str>> + Send,
     {
-        let body = self.send_request(Call::new(function_name, args)).await?;
-        extract_and_deserialize_iproto_data(body).map_err(Into::into)
+        Ok(TupleResponse(
+            self.send_request(Call::new(function_name, args)).await?,
+        ))
     }
 
     /// Select tuples from space.

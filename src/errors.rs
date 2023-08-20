@@ -6,6 +6,7 @@ use rmp::{
     decode::{MarkerReadError, NumValueReadError, ValueReadError},
     encode::{RmpWriteErr, ValueWriteError},
 };
+use rmpv::Value;
 use tokio::time::error::Elapsed;
 
 /// Error returned by Tarantool in response to a request.
@@ -34,6 +35,9 @@ pub enum Error {
     /// Error, returned in response from Tarantool instance.
     #[error("Error response: {0}")]
     Response(#[from] ErrorResponse),
+    /// Error, returned in response on `call` or `eval`.
+    #[error("Call or eval error: {0}")]
+    CallEval(Value),
 
     /// Timeout.
     #[error("Timeout")]
@@ -174,6 +178,10 @@ impl DecodingError {
         DecodingErrorDetails::UnknownResponseCode(code).into()
     }
 
+    pub(crate) fn invalid_tuple_length(expected: usize, actual: usize) -> Self {
+        DecodingErrorDetails::InvalidTupleLength { expected, actual }.into()
+    }
+
     pub(crate) fn with_location(mut self, location: DecodingErrorLocation) -> Self {
         self.location = Some(location);
         self
@@ -218,6 +226,9 @@ pub enum DecodingErrorDetails {
         expected: &'static str,
         actual: Cow<'static, str>,
     },
+    /// Tuple have invalid length
+    #[error("Invalid tuple length {actual}, expected {expected}")]
+    InvalidTupleLength { expected: usize, actual: usize },
 
     /// Error while deserializing [`rmpv::Value`] into concrete type.
     #[error("Failed to deserialize rmpv::Value")]
