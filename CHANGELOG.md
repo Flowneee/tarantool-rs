@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
  - `TupleResponse` type for decoding `eval` and `call` responses.
 
+### Fixed
+ - `delete` request sends correct request type.
+
 
 ## [0.0.5] - 2023-08-05
 ### Added

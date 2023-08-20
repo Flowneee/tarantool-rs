@@ -33,7 +33,7 @@ impl<T: Tuple> Request for Delete<T> {
     where
         Self: Sized,
     {
-        RequestType::Replace
+        RequestType::Delete
     }
 
     // NOTE: `&mut buf: mut` is required since I don't get why compiler complain

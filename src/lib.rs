@@ -12,7 +12,7 @@
 //
 // Other
 //
-// * [ ] check or remove all unsafes, unwrap, panic, expect
+// * [ ] check or remove all unsafes, panic
 // * [ ] tests
 // * [ ] bump version to 0.1.0
 // * [ ] remove unused dependencies
