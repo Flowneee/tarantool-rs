@@ -5,13 +5,17 @@ use serde::de::DeserializeOwned;
 
 use super::Executor;
 use crate::{
-    codec::request::{
-        Call, Delete, EncodedRequest, Eval, Insert, Ping, Replace, Request, Select, Update, Upsert,
+    codec::{
+        request::{
+            Call, Delete, EncodedRequest, Eval, Execute, Insert, Ping, Replace, Request, Select,
+            Update, Upsert,
+        },
+        response,
     },
     schema::{SchemaEntityKey, Space},
     tuple::Tuple,
     utils::extract_and_deserialize_iproto_data,
-    IteratorType, Result, TupleResponse,
+    IteratorType, Result, SqlResponse, TupleResponse,
 };
 
 /// Helper trait around [`Executor`] trait, which allows to send specific requests
@@ -138,6 +142,19 @@ pub trait ExecutorExt: Executor {
             .send_request(Delete::new(space_id, index_id, keys))
             .await?;
         Ok(())
+    }
+
+    // TODO: statement cache
+    /// Perform SQL query.
+    async fn execute_sql<T, I>(&self, query: I, binds: T) -> Result<SqlResponse>
+    where
+        T: Tuple + Send,
+        I: AsRef<str> + Send + Sync,
+    {
+        Ok(SqlResponse(
+            self.send_request(Execute::new_query(query.as_ref(), binds))
+                .await?,
+        ))
     }
 
     /// Find and load space by key.

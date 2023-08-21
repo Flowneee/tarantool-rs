@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased] - XXXX-XX-XX
+### Added
+ - SQL `execute` request.
+
+
 ## [0.0.6] - 2023-08-20
 ### Added
  - `TupleResponse` type for decoding `eval` and `call` responses.

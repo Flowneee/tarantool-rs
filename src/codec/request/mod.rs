@@ -4,9 +4,9 @@ use bytes::{BufMut, Bytes, BytesMut};
 use crate::errors::EncodingError;
 
 pub(crate) use self::{
-    auth::Auth, begin::Begin, call::Call, commit::Commit, delete::Delete, eval::Eval, id::Id,
-    insert::Insert, ping::Ping, replace::Replace, rollback::Rollback, select::Select,
-    update::Update, upsert::Upsert,
+    auth::Auth, begin::Begin, call::Call, commit::Commit, delete::Delete, eval::Eval,
+    execute::Execute, id::Id, insert::Insert, ping::Ping, replace::Replace, rollback::Rollback,
+    select::Select, update::Update, upsert::Upsert,
 };
 
 use std::io::Write;
@@ -19,6 +19,7 @@ mod call;
 mod commit;
 mod delete;
 mod eval;
+mod execute;
 mod id;
 mod insert;
 mod ping;

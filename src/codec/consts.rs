@@ -6,6 +6,7 @@
 pub mod keys {
     pub const REQUEST_TYPE: u8 = 0x00;
     pub const RESPONSE_CODE: u8 = 0x00;
+    pub const SQL_INFO_ROW_COUNT: u8 = 0x00;
     pub const SYNC: u8 = 0x01;
     pub const SCHEMA_VERSION: u8 = 0x05;
     pub const STREAM_ID: u8 = 0x0a;
@@ -23,6 +24,10 @@ pub mod keys {
     pub const OPS: u8 = 0x28;
     pub const DATA: u8 = 0x30;
     pub const ERROR_24: u8 = 0x31;
+    pub const SQL_TEXT: u8 = 0x40;
+    pub const SQL_BIND: u8 = 0x41;
+    pub const SQL_INFO: u8 = 0x42;
+    pub const SQL_STMT_ID: u8 = 0x43;
     pub const ERROR: u8 = 0x52;
     pub const VERSION: u8 = 0x54;
     pub const FEATURES: u8 = 0x55;

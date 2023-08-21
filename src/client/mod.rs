@@ -2,6 +2,7 @@ pub use self::{
     connection::Connection,
     executor::Executor,
     executor_ext::ExecutorExt,
+    sql_response::SqlResponse,
     stream::Stream,
     transaction::{Transaction, TransactionBuilder},
     tuple_response::TupleResponse,
@@ -12,6 +13,7 @@ pub mod schema;
 mod connection;
 mod executor;
 mod executor_ext;
+mod sql_response;
 mod stream;
 mod transaction;
 mod tuple_response;

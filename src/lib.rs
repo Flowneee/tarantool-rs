@@ -87,13 +87,13 @@ pub use self::{
 };
 
 pub mod errors;
+pub mod utils;
 
 mod builder;
 mod client;
 mod codec;
 mod transport;
 mod tuple;
-mod utils;
 
 /// Alias for [`std::result::Result<T, crate::Error>`].
 pub type Result<T> = std::result::Result<T, Error>;
