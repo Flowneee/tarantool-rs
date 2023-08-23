@@ -1,7 +1,6 @@
 use rmpv::Value;
 use serde::de::DeserializeOwned;
 
-
 use crate::{codec::consts::keys, errors::DecodingError};
 
 pub fn value_to_map(value: Value) -> Result<Vec<(Value, Value)>, DecodingError> {

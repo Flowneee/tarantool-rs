@@ -3,7 +3,7 @@ use std::io::Write;
 use crate::{
     codec::{
         consts::{keys, RequestType},
-        utils::{write_kv_str},
+        utils::write_kv_str,
     },
     errors::EncodingError,
 };
