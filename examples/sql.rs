@@ -14,14 +14,15 @@ async fn main() -> Result<(), anyhow::Error> {
             .decode_select::<(u64, String)>()?
     );
 
+    let prepared_insert = conn
+        .prepare_sql("INSERT INTO \"clients\" (\"id\", \"name\") VALUES (?, ?), (?, ?)")
+        .await?;
     info!(
         "INSERT row count {}",
-        conn.execute_sql(
-            "INSERT INTO \"clients\" (\"id\", \"name\") VALUES (?, ?), (?, ?)",
-            (99, "SQL", 100, "SQL"),
-        )
-        .await?
-        .row_count()?
+        prepared_insert
+            .execute((99, "SQL", 100, "SQL"),)
+            .await?
+            .row_count()?
     );
 
     info!(

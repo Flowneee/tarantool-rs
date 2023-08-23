@@ -14,6 +14,12 @@ pub fn write_kv_u32(mut buf: &mut dyn Write, key: u8, value: u32) -> Result<(), 
     Ok(())
 }
 
+pub fn write_kv_u64(mut buf: &mut dyn Write, key: u8, value: u64) -> Result<(), EncodingError> {
+    rmp::encode::write_pfix(&mut buf, key)?;
+    rmp::encode::write_u64(&mut buf, value)?;
+    Ok(())
+}
+
 pub fn write_kv_tuple<T: Tuple>(
     mut buf: &mut dyn Write,
     key: u8,

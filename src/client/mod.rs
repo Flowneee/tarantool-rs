@@ -2,6 +2,7 @@ pub use self::{
     connection::Connection,
     executor::Executor,
     executor_ext::ExecutorExt,
+    prepared_sql_statement::PreparedSqlStatement,
     sql_response::SqlResponse,
     stream::Stream,
     transaction::{Transaction, TransactionBuilder},
@@ -13,6 +14,7 @@ pub mod schema;
 mod connection;
 mod executor;
 mod executor_ext;
+mod prepared_sql_statement;
 mod sql_response;
 mod stream;
 mod transaction;

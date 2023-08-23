@@ -3,14 +3,11 @@ use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use rmpv::Value;
 use serde::de::DeserializeOwned;
 
-use super::Executor;
+use super::{prepared_sql_statement::PreparedSqlStatement, Executor};
 use crate::{
-    codec::{
-        request::{
-            Call, Delete, EncodedRequest, Eval, Execute, Insert, Ping, Replace, Request, Select,
-            Update, Upsert,
-        },
-        response,
+    codec::request::{
+        Call, Delete, EncodedRequest, Eval, Execute, Insert, Ping, Prepare, Replace, Request,
+        Select, Update, Upsert,
     },
     schema::{SchemaEntityKey, Space},
     tuple::Tuple,
@@ -155,6 +152,16 @@ pub trait ExecutorExt: Executor {
             self.send_request(Execute::new_query(query.as_ref(), binds))
                 .await?,
         ))
+    }
+
+    // TODO: statement cache
+    /// Prepare SQL statement.
+    async fn prepare_sql<I>(&self, query: I) -> Result<PreparedSqlStatement<&Self>>
+    where
+        I: AsRef<str> + Send + Sync,
+    {
+        let response = self.send_request(Prepare::new(query.as_ref())).await?;
+        Ok(PreparedSqlStatement::from_prepare_response(response, self)?)
     }
 
     /// Find and load space by key.
