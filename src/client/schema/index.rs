@@ -185,7 +185,7 @@ where
     ///
     /// For details see [`ExecutorExt::update`].
     // TODO: decode response
-    pub async fn update<K, O>(&self, keys: K, ops: O) -> Result<Value>
+    pub async fn update<K, O>(&self, keys: K, ops: O) -> Result<()>
     where
         K: Tuple + Send,
         O: Tuple + Send,

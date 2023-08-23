@@ -212,7 +212,7 @@ impl<E: Executor> Space<E> {
     ///
     /// For details see [`ExecutorExt::insert`].
     // TODO: decode response
-    pub async fn insert<T>(&self, tuple: T) -> Result<Value>
+    pub async fn insert<T>(&self, tuple: T) -> Result<()>
     where
         T: Tuple + Send,
     {
@@ -223,7 +223,7 @@ impl<E: Executor> Space<E> {
     ///
     /// For details see [`ExecutorExt::update`].
     // TODO: decode response
-    pub async fn update<K, O>(&self, keys: K, ops: O) -> Result<Value>
+    pub async fn update<K, O>(&self, keys: K, ops: O) -> Result<()>
     where
         K: Tuple + Send,
         O: Tuple + Send,

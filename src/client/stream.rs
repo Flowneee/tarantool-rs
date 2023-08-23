@@ -74,6 +74,10 @@ impl Executor for Stream {
     async fn transaction(&self) -> Result<Transaction> {
         self.conn.transaction().await
     }
+
+    async fn get_cached_sql_statement_id(&self, statement: &str) -> Option<u64> {
+        self.conn.get_cached_sql_statement_id(statement).await
+    }
 }
 
 impl fmt::Debug for Stream {

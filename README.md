@@ -38,7 +38,7 @@ For more examples of how to use this crate check `examples/` folder.
 * [x] CRUD operations
 * [x] transaction control (begin/commit/rollback)
 * [x] reconnection in background
-* [ ] SQL requests
+* [x] SQL requests
 * [ ] chunked responses
 * [ ] watchers and events
 * [ ] connection pooling

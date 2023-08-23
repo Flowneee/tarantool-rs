@@ -7,8 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - XXXX-XX-XX
 ### Added
- - SQL `execute` request;
- - SQL `prepare` request and prepared SQL statements support.
+ - Support for preparing and executing SQL queries.
 
 
 ## [0.0.6] - 2023-08-20

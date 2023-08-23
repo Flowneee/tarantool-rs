@@ -63,6 +63,7 @@ pub struct ConnectionBuilder {
     transaction_isolation_level: TransactionIsolationLevel,
     connect_timeout: Option<Duration>,
     reconnect_interval: Option<ReconnectInterval>,
+    sql_statement_cache_capacity: usize,
 }
 
 impl Default for ConnectionBuilder {
@@ -75,6 +76,7 @@ impl Default for ConnectionBuilder {
             transaction_isolation_level: Default::default(),
             connect_timeout: None,
             reconnect_interval: Some(ReconnectInterval::default()),
+            sql_statement_cache_capacity: 100,
         }
     }
 }
@@ -101,6 +103,7 @@ impl ConnectionBuilder {
             self.timeout,
             self.transaction_timeout,
             self.transaction_isolation_level,
+            self.sql_statement_cache_capacity,
         );
 
         // TODO: add option to disable pre 2.10 features (ID request, streams, watchers)
@@ -175,6 +178,14 @@ impl ConnectionBuilder {
         reconnect_interval: impl Into<Option<ReconnectInterval>>,
     ) -> &mut Self {
         self.reconnect_interval = reconnect_interval.into();
+        self
+    }
+
+    /// Sets capacity of SQL statment cache.
+    ///
+    /// Setting 0 disables cache. By default set to 100.
+    pub fn sql_statement_cache_capacity(&mut self, capacity: usize) -> &mut Self {
+        self.sql_statement_cache_capacity = capacity;
         self
     }
 }

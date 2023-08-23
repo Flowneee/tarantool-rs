@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use futures::{future::BoxFuture, FutureExt, TryFutureExt};
+use futures::{future::BoxFuture, FutureExt};
 use rmpv::Value;
 use serde::de::DeserializeOwned;
 
@@ -85,24 +85,25 @@ pub trait ExecutorExt: Executor {
 
     // TODO: decode response
     /// Insert tuple.
-    async fn insert<T>(&self, space_id: u32, tuple: T) -> Result<Value>
+    async fn insert<T>(&self, space_id: u32, tuple: T) -> Result<()>
     where
         T: Tuple + Send,
     {
-        let resp = self.send_request(Insert::new(space_id, tuple)).await?;
-        Ok(resp)
+        let _ = self.send_request(Insert::new(space_id, tuple)).await?;
+        Ok(())
     }
 
     // TODO: decode response
     /// Update tuple.
-    async fn update<K, O>(&self, space_id: u32, index_id: u32, keys: K, ops: O) -> Result<Value>
+    async fn update<K, O>(&self, space_id: u32, index_id: u32, keys: K, ops: O) -> Result<()>
     where
         K: Tuple + Send,
         O: Tuple + Send,
     {
-        self.send_request(Update::new(space_id, index_id, keys, ops))
-            .err_into()
-            .await
+        let _ = self
+            .send_request(Update::new(space_id, index_id, keys, ops))
+            .await?;
+        Ok(())
     }
 
     // TODO: decode response
@@ -141,20 +142,24 @@ pub trait ExecutorExt: Executor {
         Ok(())
     }
 
-    // TODO: statement cache
+    // TODO: options
+    // TODO: tests for SQL
     /// Perform SQL query.
     async fn execute_sql<T, I>(&self, query: I, binds: T) -> Result<SqlResponse>
     where
         T: Tuple + Send,
         I: AsRef<str> + Send + Sync,
     {
-        Ok(SqlResponse(
-            self.send_request(Execute::new_query(query.as_ref(), binds))
-                .await?,
-        ))
+        let query = query.as_ref();
+        let request = if let Some(stmt_id) = self.get_cached_sql_statement_id(query).await {
+            Execute::new_statement_id(stmt_id, binds)
+        } else {
+            Execute::new_query(query, binds)
+        };
+        Ok(SqlResponse(self.send_request(request).await?))
     }
 
-    // TODO: statement cache
+    // TODO: add caching in case of user incorrectly uses prepared statements
     /// Prepare SQL statement.
     async fn prepare_sql<I>(&self, query: I) -> Result<PreparedSqlStatement<&Self>>
     where

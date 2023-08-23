@@ -1,5 +1,6 @@
 use std::{
     fmt,
+    num::NonZeroUsize,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
@@ -9,9 +10,11 @@ use std::{
 
 use async_trait::async_trait;
 use futures::TryFutureExt;
+use lru::LruCache;
+use parking_lot::Mutex;
 use rmpv::Value;
 use tokio::time::timeout;
-use tracing::debug;
+use tracing::{debug, trace};
 
 use crate::{
     builder::ConnectionBuilder,
@@ -39,12 +42,16 @@ pub struct Connection {
 
 struct ConnectionInner {
     dispatcher_sender: DispatcherSender,
-    // TODO: change how stream id assigned when dispathcer have more than one connection
+    // TODO: change how stream id assigned when dispatcher have more than one connection
     next_stream_id: AtomicU32,
     timeout: Option<Duration>,
     transaction_timeout_secs: Option<f64>,
     transaction_isolation_level: TransactionIsolationLevel,
     async_rt_handle: tokio::runtime::Handle,
+    // TODO: tests
+    // TODO: move sql statement cache to separate type
+    sql_statement_cache: Option<Mutex<LruCache<String, u64>>>,
+    sql_statement_cache_update_lock: Mutex<()>,
 }
 
 impl Connection {
@@ -58,6 +65,7 @@ impl Connection {
         timeout: Option<Duration>,
         transaction_timeout: Option<Duration>,
         transaction_isolation_level: TransactionIsolationLevel,
+        sql_statement_cache_capacity: usize,
     ) -> Self {
         Self {
             inner: Arc::new(ConnectionInner {
@@ -70,6 +78,9 @@ impl Connection {
                 // NOTE: Safety: this method can be called only in async tokio context (because it
                 // is called only from ConnectionBuilder).
                 async_rt_handle: tokio::runtime::Handle::current(),
+                sql_statement_cache: NonZeroUsize::new(sql_statement_cache_capacity)
+                    .map(|x| Mutex::new(LruCache::new(x))),
+                sql_statement_cache_update_lock: Mutex::new(()),
             }),
         }
     }
@@ -121,6 +132,46 @@ impl Connection {
     pub(crate) async fn transaction(&self) -> Result<Transaction> {
         self.transaction_builder().begin().await
     }
+
+    /// Get prepared statement id from cache (if it is enabled).
+    ///
+    /// If statement not present in cache, then prepare statement and put it
+    /// to cache.
+    ///
+    /// Only one statement can be prepared at the time. All other will immediately
+    /// return None, when there is already a statement being prepared. Eventually
+    /// all statements should be allowed to prepare.
+    async fn get_cached_sql_statement_id_inner(&self, statement: &str) -> Option<u64> {
+        // Lock cache mutex (if cache is not None) and check
+        // if statement present in cache.
+        let cache = self.inner.sql_statement_cache.as_ref()?;
+        if let Some(stmt_id) = cache.lock().get(statement) {
+            return Some(*stmt_id);
+        }
+
+        // If statement not found, try to lock update lock mutex.
+        // If successful, proceed with preparing SQL statement,
+        // otherwise return None.
+        let update_lock = self.inner.sql_statement_cache_update_lock.try_lock();
+        let stmt_id = {
+            let stmt_id = match self.prepare_sql(statement).await {
+                Ok(x) => {
+                    let stmt_id = x.stmt_id();
+                    trace!(statement, "Statement prepared with id {stmt_id}");
+                    stmt_id
+                }
+                Err(err) => {
+                    debug!("Failed to prepare statement for cache: {:#}", err);
+                    return None;
+                }
+            };
+            let _ = cache.lock().put(statement.into(), stmt_id);
+            stmt_id
+        };
+        drop(update_lock);
+
+        Some(stmt_id)
+    }
 }
 
 #[async_trait]
@@ -147,6 +198,10 @@ impl Executor for Connection {
 
     async fn transaction(&self) -> Result<Transaction> {
         self.transaction().await
+    }
+
+    async fn get_cached_sql_statement_id(&self, statement: &str) -> Option<u64> {
+        self.get_cached_sql_statement_id_inner(statement).await
     }
 }
 

@@ -30,6 +30,8 @@ pub trait Executor: Sealed + Send + Sync + Debug {
     ///
     /// It is safe to create `Transaction` from any type, implementing current trait.
     async fn transaction(&self) -> Result<Transaction>;
+
+    async fn get_cached_sql_statement_id(&self, statement: &str) -> Option<u64>;
 }
 
 #[async_trait]
@@ -49,6 +51,10 @@ impl<E: Executor + Sealed + Sync + Debug> Executor for &E {
     async fn transaction(&self) -> Result<Transaction> {
         (**self).transaction().await
     }
+
+    async fn get_cached_sql_statement_id(&self, statement: &str) -> Option<u64> {
+        (**self).get_cached_sql_statement_id(statement).await
+    }
 }
 
 #[async_trait]
@@ -67,6 +73,10 @@ impl<E: Executor + Sealed + Sync + Debug> Executor for &mut E {
 
     async fn transaction(&self) -> Result<Transaction> {
         (**self).transaction().await
+    }
+
+    async fn get_cached_sql_statement_id(&self, statement: &str) -> Option<u64> {
+        (**self).get_cached_sql_statement_id(statement).await
     }
 }
 

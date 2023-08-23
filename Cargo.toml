@@ -17,6 +17,8 @@ backoff = "0.4"
 base64 = "0.21"
 bytes = "1"
 futures = "0.3"
+lru = "0.11"
+parking_lot = { version = "0.12", features = ["send_guard"] }
 rmp = "0.8"
 rmp-serde = "1"
 rmpv = { version = "1", features = ["with-serde"] }

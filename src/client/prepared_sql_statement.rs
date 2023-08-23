@@ -29,6 +29,10 @@ impl<E> PreparedSqlStatement<E> {
             .map_err(|err| DecodingError::from(err).in_key("SQL_STMT_ID"))?;
         Ok(Self::new(stmt_id, executor))
     }
+
+    pub(crate) fn stmt_id(&self) -> u64 {
+        self.stmt_id
+    }
 }
 
 impl<E: Clone> Clone for PreparedSqlStatement<E> {
