@@ -4,7 +4,11 @@ use maplit::hashmap;
 use testcontainers::{core::WaitFor, Image, ImageArgs};
 
 const IMAGE_NAME: &str = "tarantool/tarantool";
-const IMAGE_TAG: &str = "latest";
+const DEFAULT_IMAGE_TAG: &str = "latest";
+
+fn image_tag() -> String {
+    std::env::var("TARANTOOL_IMAGE_TAG").unwrap_or(DEFAULT_IMAGE_TAG.into())
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct TarantoolArgs {}
@@ -42,7 +46,7 @@ impl Image for Tarantool {
     }
 
     fn tag(&self) -> String {
-        IMAGE_TAG.into()
+        image_tag()
     }
 
     fn ready_conditions(&self) -> Vec<WaitFor> {

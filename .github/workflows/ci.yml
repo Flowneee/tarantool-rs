@@ -24,6 +24,9 @@ jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        tarantool_image_tag: [2.11, 2.10]
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -31,10 +34,13 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - uses: actions-rs/cargo@v1
+      - name: Test on ${{ matrix.tarantool_image_tag }} version
+        uses: actions-rs/cargo@v1
         with:
           command: test
           args: --all-features
+        env:
+          TARANTOOL_IMAGE_TAG: ${{ matrix.tarantool_image_tag }}
 
   fmt:
     name: Rustfmt
