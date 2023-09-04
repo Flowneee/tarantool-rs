@@ -5,9 +5,9 @@ use crate::{errors::DecodingError, utils::extract_iproto_data, Error};
 
 /// Tuple, returned from `call` and `eval` requests.
 #[derive(Clone, Debug, PartialEq)]
-pub struct TupleResponse(pub(crate) rmpv::Value);
+pub struct CallResponse(pub(crate) rmpv::Value);
 
-impl TupleResponse {
+impl CallResponse {
     /// Decode first element of the tuple, dropping everything else.
     ///
     /// This is useful if function doesn't return an error.
@@ -103,50 +103,50 @@ mod tests {
     #[test]
     fn decode_first() {
         let resp = build_tuple_response(vec![Value::Boolean(true)]);
-        assert_matches!(TupleResponse(resp).decode_first(), Ok(true));
+        assert_matches!(CallResponse(resp).decode_first(), Ok(true));
     }
 
     #[test]
     fn decode_first_err_len() {
         let resp = build_tuple_response(vec![]);
-        assert_matches!(TupleResponse(resp).decode_first::<()>(), Err(_));
+        assert_matches!(CallResponse(resp).decode_first::<()>(), Err(_));
     }
 
     #[test]
     fn decode_first_err_wrong_type() {
         let resp = build_tuple_response(vec![Value::Boolean(true)]);
-        assert_matches!(TupleResponse(resp).decode_first::<String>(), Err(_));
+        assert_matches!(CallResponse(resp).decode_first::<String>(), Err(_));
     }
 
     #[test]
     fn decode_two() {
         let resp = build_tuple_response(vec![Value::Boolean(true), Value::Boolean(false)]);
-        assert_matches!(TupleResponse(resp).decode_two(), Ok((true, false)));
+        assert_matches!(CallResponse(resp).decode_two(), Ok((true, false)));
     }
 
     #[test]
     fn decode_two_err_len() {
         let resp = build_tuple_response(vec![]);
-        assert_matches!(TupleResponse(resp).decode_two::<(), ()>(), Err(_));
+        assert_matches!(CallResponse(resp).decode_two::<(), ()>(), Err(_));
 
         let resp = build_tuple_response(vec![Value::Boolean(true)]);
-        assert_matches!(TupleResponse(resp).decode_two::<(), ()>(), Err(_));
+        assert_matches!(CallResponse(resp).decode_two::<(), ()>(), Err(_));
     }
 
     #[test]
     fn decode_result_ok() {
         let resp = build_tuple_response(vec![Value::Boolean(true)]);
-        assert_matches!(TupleResponse(resp).decode_result(), Ok(true));
+        assert_matches!(CallResponse(resp).decode_result(), Ok(true));
 
         let resp = build_tuple_response(vec![Value::Boolean(true), Value::Nil]);
-        assert_matches!(TupleResponse(resp).decode_result(), Ok(true));
+        assert_matches!(CallResponse(resp).decode_result(), Ok(true));
     }
 
     #[test]
     fn decode_result_err_present() {
         let resp = build_tuple_response(vec![Value::Boolean(true), Value::Boolean(false)]);
         assert_matches!(
-            TupleResponse(resp).decode_result::<bool>(),
+            CallResponse(resp).decode_result::<bool>(),
             Err(Error::CallEval(Value::Boolean(false)))
         );
     }
@@ -154,12 +154,12 @@ mod tests {
     #[test]
     fn decode_result_err_wrong_type() {
         let resp = build_tuple_response(vec![Value::Boolean(true), Value::Nil]);
-        assert_matches!(TupleResponse(resp).decode_result::<String>(), Err(_));
+        assert_matches!(CallResponse(resp).decode_result::<String>(), Err(_));
     }
 
     #[test]
     fn decode_full() {
         let resp = build_tuple_response(vec![Value::Boolean(true), Value::Boolean(false)]);
-        assert_matches!(TupleResponse(resp).decode_full(), Ok((true, Some(false))));
+        assert_matches!(CallResponse(resp).decode_full(), Ok((true, Some(false))));
     }
 }

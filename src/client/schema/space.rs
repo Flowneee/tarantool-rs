@@ -9,8 +9,8 @@ use serde::{de::DeserializeOwned, Deserialize};
 
 use super::{Index, IndexMetadata, OwnedIndex, SchemaEntityKey, SystemSpacesId, PRIMARY_INDEX_ID};
 use crate::{
-    client::ExecutorExt, tuple::Tuple, utils::UniqueIdNameMap, Error, Executor, IteratorType,
-    Result, Transaction,
+    client::ExecutorExt, tuple::Tuple, utils::UniqueIdNameMap, DmoResponse, Error, Executor,
+    IteratorType, Result, Transaction,
 };
 
 /// Space metadata with its indices metadata from [system views](https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_space/system_views/).
@@ -211,8 +211,7 @@ impl<E: Executor> Space<E> {
     /// Call `insert` on current space.
     ///
     /// For details see [`ExecutorExt::insert`].
-    // TODO: decode response
-    pub async fn insert<T>(&self, tuple: T) -> Result<()>
+    pub async fn insert<T>(&self, tuple: T) -> Result<DmoResponse>
     where
         T: Tuple + Send,
     {
@@ -222,8 +221,7 @@ impl<E: Executor> Space<E> {
     /// Call `update` with primary index on current space.
     ///
     /// For details see [`ExecutorExt::update`].
-    // TODO: decode response
-    pub async fn update<K, O>(&self, keys: K, ops: O) -> Result<()>
+    pub async fn update<K, O>(&self, keys: K, ops: O) -> Result<DmoResponse>
     where
         K: Tuple + Send,
         O: Tuple + Send,
@@ -236,8 +234,7 @@ impl<E: Executor> Space<E> {
     /// Call `upsert` on current space.
     ///
     /// For details see [`ExecutorExt::upsert`].
-    // TODO: decode response
-    pub async fn upsert<T, O>(&self, tuple: T, ops: O) -> Result<()>
+    pub async fn upsert<T, O>(&self, tuple: T, ops: O) -> Result<DmoResponse>
     where
         T: Tuple + Send,
         O: Tuple + Send,
@@ -248,8 +245,7 @@ impl<E: Executor> Space<E> {
     /// Call `replace` on current space.
     ///
     /// For details see [`ExecutorExt::replace`].
-    // TODO: decode response
-    pub async fn replace<T>(&self, tuple: T) -> Result<()>
+    pub async fn replace<T>(&self, tuple: T) -> Result<DmoResponse>
     where
         T: Tuple + Send,
     {
@@ -259,8 +255,7 @@ impl<E: Executor> Space<E> {
     /// Call `delete` with primary index on current space.
     ///
     /// For details see [`ExecutorExt::delete`].
-    // TODO: decode response
-    pub async fn delete<T>(&self, keys: T) -> Result<()>
+    pub async fn delete<T>(&self, keys: T) -> Result<DmoResponse>
     where
         T: Tuple + Send,
     {

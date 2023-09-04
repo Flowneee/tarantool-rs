@@ -4,14 +4,15 @@ extern crate rental;
 use std::time::Duration;
 
 use assert_matches::assert_matches;
-use serde::Deserialize;
-use tarantool_rs::{errors::Error, Connection, ExecutorExt};
+use rmpv::Value;
+use serde::{Deserialize, Serialize};
+use tarantool_rs::{errors::Error, Connection, Executor, ExecutorExt};
 
 use crate::common::TarantoolTestContainer;
 
 mod common;
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Serialize)]
 struct CrewMember {
     id: u32,
     name: String,
@@ -196,6 +197,51 @@ async fn timeout() -> Result<(), anyhow::Error> {
         conn.eval("require('fiber').sleep(1)", ()).await,
         Err(tarantool_rs::Error::Timeout)
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn dmo() -> Result<(), anyhow::Error> {
+    let container = TarantoolTestContainer::default();
+
+    let conn = Connection::builder()
+        .timeout(Duration::from_millis(100))
+        .build(format!("127.0.0.1:{}", container.connect_port()))
+        .await?;
+
+    let tx = conn.transaction().await?;
+    let space = tx.space("ds9_crew").await?.expect("Space 'ds9_crew' found");
+    let name_idx = space.index("idx_name").unwrap();
+
+    // update
+    let new_value: CrewMember = name_idx
+        .update(
+            ("Benjamin Sisko",),
+            (Value::Array(vec!["=".into(), 2.into(), "Captain".into()]),),
+        )
+        .await?
+        .decode()?;
+    assert_eq!(
+        new_value,
+        CrewMember {
+            id: 1,
+            name: "Benjamin Sisko".into(),
+            rank: "Captain".into(),
+            occupation: "Commanding officer".into()
+        }
+    );
+
+    // delete
+    let _: CrewMember = name_idx.delete(("Jadzia Dax",)).await?.decode()?;
+
+    // insert
+    let _: CrewMember = space
+        .insert((None::<()>, "Ezri Dax", "Ensign", "Counselor"))
+        .await?
+        .decode()?;
+
+    tx.commit().await?;
 
     Ok(())
 }

@@ -63,7 +63,11 @@ impl Response {
             return Err(DecodingError::missing_key("SCHEMA_VERSION"));
         };
         let body = match response_code {
-            OK => ResponseBody::Ok(rmpv::decode::read_value(&mut buf)?),
+            OK => {
+                let v = rmpv::decode::read_value(&mut buf)?;
+                debug!("{}", v);
+                ResponseBody::Ok(v)
+            }
             code @ ERROR_RANGE_START..=ERROR_RANGE_END => {
                 let code = code - 0x8000;
                 let mut description = None;

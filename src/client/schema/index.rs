@@ -5,8 +5,8 @@ use serde::{de::DeserializeOwned, Deserialize};
 
 use super::{SpaceMetadata, SystemSpacesId, PRIMARY_INDEX_ID};
 use crate::{
-    client::ExecutorExt, tuple::Tuple, utils::UniqueIdName, Executor, IteratorType, Result,
-    Transaction,
+    client::ExecutorExt, tuple::Tuple, utils::UniqueIdName, DmoResponse, Executor, IteratorType,
+    Result, Transaction,
 };
 
 /// Index metadata from [system view](https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_space/system_views/).
@@ -184,8 +184,7 @@ where
     /// Call `update` on current index.
     ///
     /// For details see [`ExecutorExt::update`].
-    // TODO: decode response
-    pub async fn update<K, O>(&self, keys: K, ops: O) -> Result<()>
+    pub async fn update<K, O>(&self, keys: K, ops: O) -> Result<DmoResponse>
     where
         K: Tuple + Send,
         O: Tuple + Send,
@@ -203,8 +202,7 @@ where
     /// Call `delete` on current index.
     ///
     /// For details see [`ExecutorExt::delete`].
-    // TODO: decode response
-    pub async fn delete<T>(&self, keys: T) -> Result<()>
+    pub async fn delete<T>(&self, keys: T) -> Result<DmoResponse>
     where
         T: Tuple + Send,
     {
