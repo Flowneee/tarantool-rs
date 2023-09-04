@@ -3,7 +3,6 @@ use futures::{future::BoxFuture, FutureExt};
 use rmpv::Value;
 use serde::de::DeserializeOwned;
 
-use super::{prepared_sql_statement::PreparedSqlStatement, Executor};
 use crate::{
     codec::request::{
         Call, Delete, EncodedRequest, Eval, Execute, Insert, Ping, Prepare, Replace, Request,
@@ -12,7 +11,7 @@ use crate::{
     schema::{SchemaEntityKey, Space},
     tuple::Tuple,
     utils::extract_and_deserialize_iproto_data,
-    CallResponse, DmoResponse, IteratorType, Result, SqlResponse,
+    CallResponse, DmoResponse, Executor, IteratorType, PreparedSqlStatement, Result, SqlResponse,
 };
 
 /// Helper trait around [`Executor`] trait, which allows to send specific requests
@@ -93,6 +92,7 @@ pub trait ExecutorExt: Executor {
         ))
     }
 
+    // TODO: docs and doctests for DmoOperation
     /// Update tuple.
     async fn update<K, O>(
         &self,
@@ -122,7 +122,6 @@ pub trait ExecutorExt: Executor {
         ))
     }
 
-    // TODO: structured tuple
     /// Insert a tuple into a space. If a tuple with the same primary key already exists,
     /// replaces the existing tuple with a new one.
     async fn replace<T>(&self, space_id: u32, tuple: T) -> Result<DmoResponse>
@@ -134,7 +133,6 @@ pub trait ExecutorExt: Executor {
         ))
     }
 
-    // TODO: structured tuple
     /// Delete a tuple identified by the primary key.
     async fn delete<T>(&self, space_id: u32, index_id: u32, keys: T) -> Result<DmoResponse>
     where

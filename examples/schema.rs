@@ -1,5 +1,4 @@
-use rmpv::Value;
-use tarantool_rs::{Connection, Executor, ExecutorExt, IteratorType};
+use tarantool_rs::{Connection, DmoOperation, Executor, ExecutorExt, IteratorType};
 use tracing::info;
 
 #[tokio::main]
@@ -18,17 +17,21 @@ async fn main() -> Result<(), anyhow::Error> {
             .select::<(i64, String), _>(None, None, Some(IteratorType::All), ())
             .await?
     );
-    info!("UPSERT: {:?}", space.upsert((0, "Name"), ("=",)).await?);
+    info!(
+        "UPSERT: {:?}",
+        space
+            .upsert(
+                (0, "Name"),
+                DmoOperation::string_splice("name", 2, 2, "!!".into()),
+            )
+            .await?
+    );
     info!(
         "UPDATE: {:?}",
         space
             .update(
                 (0,),
-                (rmpv::Value::Array(vec![
-                    "=".into(),
-                    1.into(),
-                    "Second".into()
-                ]),),
+                (DmoOperation::string_splice("name", 2, 2, "!!".into()),)
             )
             .await?
     );

@@ -1,8 +1,17 @@
 use std::io::Write;
 
-use serde::Serialize;
-
 use crate::errors::EncodingError;
+
+pub trait TupleElement {
+    fn encode_into_writer<W: Write>(&self, buf: W) -> Result<(), EncodingError>;
+}
+
+impl<T: serde::Serialize> TupleElement for T {
+    fn encode_into_writer<W: Write>(&self, mut buf: W) -> Result<(), EncodingError> {
+        rmp_serde::encode::write(&mut buf, self)?;
+        Ok(())
+    }
+}
 
 /// Trait, describing type, which can be encoded into
 /// MessagePack tuple.
@@ -13,11 +22,21 @@ pub trait Tuple {
     fn encode_into_writer<W: Write>(&self, buf: W) -> Result<(), EncodingError>;
 }
 
-impl<T: Serialize> Tuple for Vec<T> {
+impl<T: TupleElement> Tuple for Vec<T> {
     fn encode_into_writer<W: Write>(&self, mut buf: W) -> Result<(), EncodingError> {
         rmp::encode::write_array_len(&mut buf, self.len() as u32)?;
         for x in self.iter() {
-            rmp_serde::encode::write(&mut buf, &x)?;
+            x.encode_into_writer(&mut buf)?;
+        }
+        Ok(())
+    }
+}
+
+impl<T: TupleElement> Tuple for &[T] {
+    fn encode_into_writer<W: Write>(&self, mut buf: W) -> Result<(), EncodingError> {
+        rmp::encode::write_array_len(&mut buf, self.len() as u32)?;
+        for x in self.iter() {
+            x.encode_into_writer(&mut buf)?;
         }
         Ok(())
     }
@@ -39,26 +58,26 @@ impl<T: Tuple> Tuple for &T {
 // `= self` idea is from https://stackoverflow.com/a/56700760/5033855
 macro_rules! impl_tuple_for_tuple {
     ( $param:tt ) => {
-        impl<$param : serde::Serialize> Tuple for ($param,) {
+        impl<$param : $crate::TupleElement> Tuple for ($param,) {
             fn encode_into_writer<W: Write>(&self, mut buf: W) -> Result<(), EncodingError> {
                 rmp::encode::write_array_len(&mut buf, 1)?;
-                rmp_serde::encode::write(&mut buf, &self.0)?;
+                self.0.encode_into_writer(&mut buf)?;
                 Ok(())
             }
         }
     };
     ( $param:tt, $($params:tt),* ) => {
-        impl<$param : serde::Serialize, $($params : serde::Serialize,)*> Tuple for ($param, $($params,)*) {
+        impl<$param : $crate::TupleElement , $($params : $crate::TupleElement,)*> Tuple for ($param, $($params,)*) {
             #[allow(non_snake_case)]
             fn encode_into_writer<W: Write>(&self, mut buf: W) -> Result<(), EncodingError> {
                 rmp::encode::write_array_len(&mut buf, count_tts!($param $($params)+) as u32)?;
 
                 let ($param, $($params,)+) = self;
 
-                rmp_serde::encode::write(&mut buf, $param)?;
+                $param.encode_into_writer(&mut buf)?;
 
                 $(
-                    rmp_serde::encode::write(&mut buf, $params)?;
+                    $params.encode_into_writer(&mut buf)?;
                 )+
 
                 Ok(())

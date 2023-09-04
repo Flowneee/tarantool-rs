@@ -5,9 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.0.8] - 2023-09-04
+## [Unreleased] - 2023-09-04
 ### Added
- - Data-manipulation operations (insert, update, upsert, replace, delete) now return `DmoResponse` with row, returned by operation (#7).
+ - Data-manipulation operations (insert, update, upsert, replace, delete) now return `DmoResponse` with row, returned by operation ([#7](https://github.com/Flowneee/tarantool-rs/issues/7));
+ - `TupleElement` type, which allow to write type into `Tuple` without having `serde::Serialize` implemented for it;
+ - `DmoOperation` for constructing operations in `update` and `upsert` calls.
 
 ### Changed
  - `TupleResponse` renamed to `CallResponse`.

@@ -82,7 +82,7 @@ pub use self::{
     client::*,
     codec::consts::{IteratorType, TransactionIsolationLevel},
     errors::Error,
-    tuple::Tuple,
+    tuple::{Tuple, TupleElement},
 };
 
 pub mod errors;

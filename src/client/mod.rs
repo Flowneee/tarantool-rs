@@ -1,24 +1,23 @@
 pub use self::{
     call_response::CallResponse,
     connection::Connection,
-    dmo_response::DmoResponse,
+    dmo::{DmoOperation, DmoResponse},
     executor::Executor,
     executor_ext::ExecutorExt,
-    prepared_sql_statement::PreparedSqlStatement,
-    sql_response::SqlResponse,
+    sql::{PreparedSqlStatement, SqlResponse},
     stream::Stream,
     transaction::{Transaction, TransactionBuilder},
 };
 
+// TODO: either reimport everything from schema or add dmo and sql mods
 pub mod schema;
 
 mod call_response;
 mod connection;
-mod dmo_response;
+mod dmo;
 mod executor;
 mod executor_ext;
-mod prepared_sql_statement;
-mod sql_response;
+mod sql;
 mod stream;
 mod transaction;
 
