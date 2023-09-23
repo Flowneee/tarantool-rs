@@ -10,6 +10,9 @@ use crate::{
     transport::Dispatcher,
 };
 
+const DEFAULT_DISPATCHER_INTERNAL_QUEUE_SIZE: usize = 500;
+const DEFAULT_SQL_STATEMENT_CACHE_CAPACITY: usize = 500;
+
 /// Interval parameters for background reconnection.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ReconnectInterval {
@@ -64,6 +67,7 @@ pub struct ConnectionBuilder {
     connect_timeout: Option<Duration>,
     reconnect_interval: Option<ReconnectInterval>,
     sql_statement_cache_capacity: usize,
+    dispatcher_internal_queue_size: usize,
 }
 
 impl Default for ConnectionBuilder {
@@ -76,7 +80,8 @@ impl Default for ConnectionBuilder {
             transaction_isolation_level: Default::default(),
             connect_timeout: None,
             reconnect_interval: Some(ReconnectInterval::default()),
-            sql_statement_cache_capacity: 100,
+            sql_statement_cache_capacity: DEFAULT_SQL_STATEMENT_CACHE_CAPACITY,
+            dispatcher_internal_queue_size: DEFAULT_DISPATCHER_INTERNAL_QUEUE_SIZE,
         }
     }
 }
@@ -186,6 +191,19 @@ impl ConnectionBuilder {
     /// Setting 0 disables cache. By default set to 100.
     pub fn sql_statement_cache_capacity(&mut self, capacity: usize) -> &mut Self {
         self.sql_statement_cache_capacity = capacity;
+        self
+    }
+
+    /// Sets size of the internal queue between connection and dispatcher.
+    ///
+    /// This queue contains all requests, made from [`Connection`]s/[`Stream`]s/etc.
+    /// Increasing its size can help if you have a lot of requests, made concurrently
+    /// and frequently, however this will increase memory consumption slightly.
+    ///
+    /// By default set to 500, which should be reasonable compromise between memory
+    /// (about 50 KB) and performance.
+    pub fn dispatcher_internal_queue_size(&mut self, size: usize) -> &mut Self {
+        self.dispatcher_internal_queue_size = size;
         self
     }
 }

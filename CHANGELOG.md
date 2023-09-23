@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.0.9] - 2023-09-23
+### Added
+ - `dispatcher_internal_queue_size` parameter to builder, allowing to customize size of internal queue between dispatcher and connection.
+
+### Fixed
+ - Increased size of internal queue between dispatcher and connection, which should significantly increase performance (previously it was degrading rapidly with a lot of parallel requests).
+
+
 ## [0.0.8] - 2023-09-05
 ### Added
  - Data-manipulation operations (insert, update, upsert, replace, delete) now return `DmoResponse` with row, returned by operation ([#7](https://github.com/Flowneee/tarantool-rs/issues/7));
