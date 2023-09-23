@@ -1,14 +1,12 @@
-#[macro_use]
-extern crate rental;
-
 use std::time::Duration;
 
 use assert_matches::assert_matches;
 use rmpv::Value;
 use serde::{Deserialize, Serialize};
 use tarantool_rs::{errors::Error, Connection, Executor, ExecutorExt};
+use tracing_test::traced_test;
 
-use crate::common::TarantoolTestContainer;
+use crate::common::{TarantoolTestContainer, TarantoolTestContainerExt};
 
 mod common;
 
@@ -21,8 +19,9 @@ struct CrewMember {
 }
 
 #[tokio::test]
+#[traced_test]
 async fn image_test() -> Result<(), anyhow::Error> {
-    let container = TarantoolTestContainer::default();
+    let container = TarantoolTestContainer::new_with_test_data();
 
     let conn = container.create_conn().await?;
     conn.ping().await?;
@@ -31,20 +30,23 @@ async fn image_test() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
+#[traced_test]
 async fn auth_ok() -> Result<(), anyhow::Error> {
-    let container = TarantoolTestContainer::default();
+    let container = TarantoolTestContainer::new_with_test_data();
 
     let conn = Connection::builder()
         .auth("Sisko", Some("A-4-7-1"))
         .build(format!("127.0.0.1:{}", container.connect_port()))
         .await?;
     conn.ping().await?;
+
     Ok(())
 }
 
 #[tokio::test]
+#[traced_test]
 async fn auth_err() -> Result<(), anyhow::Error> {
-    let container = TarantoolTestContainer::default();
+    let container = TarantoolTestContainer::new_with_test_data();
 
     assert_matches!(
         Connection::builder()
@@ -59,8 +61,9 @@ async fn auth_err() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
+#[traced_test]
 async fn eval() -> Result<(), anyhow::Error> {
-    let container = TarantoolTestContainer::default();
+    let container = TarantoolTestContainer::new_with_test_data();
 
     let conn = container.create_conn().await?;
     let res: u32 = conn.eval("return ...", (42,)).await?.decode_result()?;
@@ -70,8 +73,9 @@ async fn eval() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
+#[traced_test]
 async fn call() -> Result<(), anyhow::Error> {
-    let container = TarantoolTestContainer::default();
+    let container = TarantoolTestContainer::new_with_test_data();
 
     let conn = container.create_conn().await?;
     let res: String = conn.call("station_name", (false,)).await?.decode_first()?;
@@ -81,8 +85,9 @@ async fn call() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
+#[traced_test]
 async fn retrieve_schema() -> Result<(), anyhow::Error> {
-    let container = TarantoolTestContainer::default();
+    let container = TarantoolTestContainer::new_with_test_data();
 
     let conn = container.create_conn().await?;
     let space = conn
@@ -103,8 +108,9 @@ async fn retrieve_schema() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
+#[traced_test]
 async fn select_all() -> Result<(), anyhow::Error> {
-    let container = TarantoolTestContainer::default();
+    let container = TarantoolTestContainer::new_with_test_data();
 
     let conn: Connection = container.create_conn().await?;
     let space = conn
@@ -130,8 +136,9 @@ async fn select_all() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
+#[traced_test]
 async fn select_limits() -> Result<(), anyhow::Error> {
-    let container = TarantoolTestContainer::default();
+    let container = TarantoolTestContainer::new_with_test_data();
 
     let conn: Connection = container.create_conn().await?;
     let space = conn
@@ -157,8 +164,9 @@ async fn select_limits() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
+#[traced_test]
 async fn select_by_key() -> Result<(), anyhow::Error> {
-    let container = TarantoolTestContainer::default();
+    let container = TarantoolTestContainer::new_with_test_data();
 
     let conn: Connection = container.create_conn().await?;
     let space = conn
@@ -185,8 +193,9 @@ async fn select_by_key() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
+#[traced_test]
 async fn timeout() -> Result<(), anyhow::Error> {
-    let container = TarantoolTestContainer::default();
+    let container = TarantoolTestContainer::new_with_test_data();
 
     let conn = Connection::builder()
         .timeout(Duration::from_millis(100))
@@ -202,8 +211,9 @@ async fn timeout() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
+#[traced_test]
 async fn dmo() -> Result<(), anyhow::Error> {
-    let container = TarantoolTestContainer::default();
+    let container = TarantoolTestContainer::new_with_test_data();
 
     let conn = Connection::builder()
         .timeout(Duration::from_millis(100))

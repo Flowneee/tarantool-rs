@@ -1,0 +1,10 @@
+[package]
+name = "tarantool-test-container"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+testcontainers = { git = "https://github.com/testcontainers/testcontainers-rs.git", features = ["experimental", "watchdog"] }
+maplit = "1"
+rental = "0.5"
