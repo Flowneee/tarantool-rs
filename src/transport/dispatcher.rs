@@ -56,6 +56,7 @@ impl Dispatcher {
         password: Option<&str>,
         connect_timeout: Option<Duration>,
         reconnect_interval: Option<ReconnectInterval>,
+        dispatcher_internal_queue_size: usize,
     ) -> Result<(Self, DispatcherSender), Error>
     where
         A: ToSocketAddrs + Display + Clone + Send + Sync + 'static,
@@ -74,8 +75,7 @@ impl Dispatcher {
 
         let conn = conn_factory().await?;
 
-        // TODO: test whether increased size can help with performance
-        let (tx, rx) = mpsc::channel(1);
+        let (tx, rx) = mpsc::channel(dispatcher_internal_queue_size);
 
         Ok((
             Self {

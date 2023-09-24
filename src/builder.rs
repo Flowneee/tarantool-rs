@@ -98,6 +98,7 @@ impl ConnectionBuilder {
             self.password.as_deref(),
             self.timeout,
             self.reconnect_interval.clone(),
+            self.dispatcher_internal_queue_size,
         )
         .await?;
 
