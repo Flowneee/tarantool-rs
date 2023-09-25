@@ -8,11 +8,17 @@ use std::{
 use futures::{SinkExt, TryStreamExt};
 use tokio::{
     io::AsyncReadExt,
-    net::{TcpStream, ToSocketAddrs},
-    sync::oneshot,
+    net::{
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+        TcpStream, ToSocketAddrs,
+    },
+    sync::{mpsc, oneshot},
 };
-use tokio_util::codec::Framed;
-use tracing::{debug, trace, warn};
+use tokio_util::{
+    codec::{Framed, FramedParts, FramedRead, FramedWrite},
+    sync::{CancellationToken, DropGuard},
+};
+use tracing::{debug, error, trace, warn};
 
 use super::dispatcher::DispatcherResponse;
 use crate::{
@@ -24,10 +30,25 @@ use crate::{
     errors::{CodecDecodeError, CodecEncodeError, Error},
 };
 
+async fn write_loop(
+    mut rx: mpsc::Receiver<EncodedRequest>,
+    mut writer: FramedWrite<OwnedWriteHalf, ClientCodec>,
+    cancellation_token: CancellationToken,
+) {
+    while let Some(next) = rx.recv().await {
+        if let Err(err) = writer.send(next).await {
+            error!("Failed to write message to TCP connection: {err:?}");
+            return;
+        }
+    }
+}
+
 pub(crate) struct Connection {
-    stream: Framed<TcpStream, ClientCodec>,
+    reader: FramedRead<OwnedReadHalf, ClientCodec>,
+    writer_tx: mpsc::Sender<EncodedRequest>,
     in_flights: HashMap<u32, oneshot::Sender<DispatcherResponse>>,
     next_sync: AtomicU32,
+    _drop_guard: DropGuard,
 }
 
 // TODO: cancel
@@ -41,19 +62,32 @@ impl Connection {
         A: ToSocketAddrs + Display,
     {
         debug!("Starting connection to Tarantool {}", addr);
-        let mut tcp = TcpStream::connect(&addr).await?;
+        let tcp = TcpStream::connect(&addr).await?;
         trace!("Connection established to {}", addr);
+        let (mut read_stream, write_stream) = tcp.into_split();
 
         let mut greeting_buffer = [0u8; Greeting::SIZE];
-        tcp.read_exact(&mut greeting_buffer).await?;
+        read_stream.read_exact(&mut greeting_buffer).await?;
         let greeting = Greeting::decode(greeting_buffer)?;
         debug!("Server: {}", greeting.server);
         trace!("Salt: {:?}", greeting.salt);
 
+        let reader = FramedRead::new(read_stream, ClientCodec::default());
+        let writer = FramedWrite::new(write_stream, ClientCodec::default());
+
+        let cancellation_token = CancellationToken::new();
+        let drop_guard = cancellation_token.clone().drop_guard();
+
+        let (writer_tx, writer_rx) = mpsc::channel(500);
+
+        let _ = tokio::spawn(write_loop(writer_rx, writer, cancellation_token));
+
         let mut this = Self {
-            stream: Framed::new(tcp, ClientCodec::default()),
+            reader,
+            writer_tx,
             in_flights: HashMap::with_capacity(5),
             next_sync: AtomicU32::new(0),
+            _drop_guard: drop_guard,
         };
 
         if let Some(user) = user {
@@ -86,7 +120,9 @@ impl Connection {
         *request.sync_mut() = self.next_sync();
 
         trace!("Sending auth request");
-        self.stream.send(request).await?;
+        if let Err(_) = self.writer_tx.send(request).await {
+            panic!("Failed to send to interal writer channel (auth)");
+        };
 
         let resp = self.get_next_stream_value().await?;
         match resp.body {
@@ -128,21 +164,24 @@ impl Connection {
             }
             return Ok(());
         }
-        match self.stream.send(request).await {
+        match self.writer_tx.send(request).await {
             Ok(x) => Ok(x),
-            Err(CodecEncodeError::Encode(err)) => {
-                if self
-                    .in_flights
-                    .remove(&sync)
-                    .expect("Shouldn't panic, value was just inserted")
-                    .send(Err(err.into()))
-                    .is_err()
-                {
-                    warn!("Failed to pass error to sync {}, receiver dropped", sync);
-                }
-                Ok(())
+            // Err(CodecEncodeError::Encode(err)) => {
+            //     if self
+            //         .in_flights
+            //         .remove(&sync)
+            //         .expect("Shouldn't panic, value was just inserted")
+            //         .send(Err(err.into()))
+            //         .is_err()
+            //     {
+            //         warn!("Failed to pass error to sync {}, receiver dropped", sync);
+            //     }
+            //     Ok(())
+            // }
+            // Err(CodecEncodeError::Io(err)) => Err(err),
+            Err(_) => {
+                panic!("Failed to send to interal writer channel");
             }
-            Err(CodecEncodeError::Io(err)) => Err(err),
         }
     }
 
@@ -158,7 +197,7 @@ impl Connection {
     }
 
     async fn get_next_stream_value(&mut self) -> Result<Response, CodecDecodeError> {
-        match self.stream.try_next().await {
+        match self.reader.try_next().await {
             Ok(Some(x)) => Ok(x),
             Ok(None) => Err(CodecDecodeError::Closed),
             Err(e) => Err(e),
