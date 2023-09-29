@@ -92,7 +92,7 @@ impl ConnectionBuilder {
     where
         A: ToSocketAddrs + Display + Clone + Send + Sync + 'static,
     {
-        let (dispatcher, disaptcher_sender) = Dispatcher::new(
+        let (dispatcher_fut, disaptcher_sender) = Dispatcher::new(
             addr,
             self.user.as_deref(),
             self.password.as_deref(),
@@ -103,7 +103,7 @@ impl ConnectionBuilder {
         .await?;
 
         // TODO: support setting custom executor
-        tokio::spawn(dispatcher.run());
+        tokio::spawn(dispatcher_fut);
         let conn = Connection::new(
             disaptcher_sender,
             self.timeout,

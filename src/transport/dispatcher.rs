@@ -1,16 +1,22 @@
-use std::{fmt::Display, future::Future, pin::Pin, time::Duration};
+use std::{fmt::Display, future::Future, pin::Pin, process::Output, time::Duration};
 
 use backoff::{backoff::Backoff, ExponentialBackoff, ExponentialBackoffBuilder};
-use futures::TryFutureExt;
+use futures::{Stream, TryFutureExt, TryStreamExt};
 use tokio::{
-    net::ToSocketAddrs,
+    io::AsyncReadExt,
+    net::{
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+        TcpStream, ToSocketAddrs,
+    },
     sync::{mpsc, oneshot},
 };
-use tracing::{debug, error};
+use tokio_util::codec::{FramedRead, FramedWrite};
+use tracing::{debug, error, trace};
 
 use super::connection::Connection;
 use crate::{
-    codec::{request::EncodedRequest, response::Response},
+    codec::{request::EncodedRequest, response::Response, ClientCodec, Greeting},
+    errors::CodecDecodeError,
     Error, ReconnectInterval,
 };
 
@@ -44,7 +50,7 @@ type ConnectDynFuture = dyn Future<Output = Result<Connection, Error>> + Send;
 /// Currently no-op, in future it should handle reconnects, schema reloading, pooling.
 pub(crate) struct Dispatcher {
     rx: mpsc::Receiver<DispatcherRequest>,
-    conn: Connection,
+    conn: Option<Connection>,
     conn_factory: Box<dyn Fn() -> Pin<Box<ConnectDynFuture>> + Send + Sync>,
     reconnect_interval: Option<ReconnectInterval>,
 }
@@ -57,7 +63,7 @@ impl Dispatcher {
         connect_timeout: Option<Duration>,
         reconnect_interval: Option<ReconnectInterval>,
         dispatcher_internal_queue_size: usize,
-    ) -> Result<(Self, DispatcherSender), Error>
+    ) -> Result<(impl Future<Output = ()>, DispatcherSender), Error>
     where
         A: ToSocketAddrs + Display + Clone + Send + Sync + 'static,
     {
@@ -80,10 +86,11 @@ impl Dispatcher {
         Ok((
             Self {
                 rx,
-                conn,
+                conn: Some(conn),
                 conn_factory,
                 reconnect_interval,
-            },
+            }
+            .run(),
             DispatcherSender { tx },
         ))
     }
@@ -96,7 +103,7 @@ impl Dispatcher {
         loop {
             match (self.conn_factory)().await {
                 Ok(conn) => {
-                    self.conn = conn;
+                    self.conn = Some(conn);
                     return;
                 }
                 Err(err) => {
@@ -112,39 +119,14 @@ impl Dispatcher {
     pub(crate) async fn run(mut self) {
         debug!("Starting dispatcher");
         loop {
-            if self.run_conn().await {
-                return;
+            if let Some(conn) = self.conn.take() {
+                if conn.run(&mut self.rx).await {
+                    return;
+                }
+            } else {
+                self.reconnect().await;
             }
-            self.reconnect().await;
         }
-    }
-
-    pub(crate) async fn run_conn(&mut self) -> bool {
-        let err = loop {
-            tokio::select! {
-                next = self.conn.handle_next_response() => {
-                    if let Err(e) = next {
-                        break e;
-                    }
-                }
-                next = self.rx.recv() => {
-                    if let Some((request, tx)) = next {
-                        // Check whether tx is closed in case someone cancelled request
-                        // while it was in queue
-                        if !tx.is_closed() {
-                            if let Err(err) = self.conn.send_request(request, tx).await {
-                                break err.into();
-                            }
-                        }
-                    } else {
-                        debug!("All senders dropped");
-                        return true
-                    }
-                }
-            }
-        };
-        self.conn.finish_with_error(err);
-        false
     }
 }
 
