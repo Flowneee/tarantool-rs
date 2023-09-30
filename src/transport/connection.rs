@@ -1,6 +1,7 @@
-use std::{collections::HashMap, fmt::Display, time::Duration};
+use std::{collections::HashMap, fmt::Display, sync::Arc, time::Duration};
 
 use futures::{future::pending, lock::BiLock, SinkExt, TryFutureExt, TryStreamExt};
+use parking_lot::Mutex;
 use tokio::{
     io::AsyncReadExt,
     net::{
@@ -109,7 +110,7 @@ impl ConnectionData {
 }
 
 async fn sender_task(
-    connection_data: &mut BiLock<ConnectionData>,
+    connection_data: &Mutex<ConnectionData>,
     write_stream: &mut FramedWrite<OwnedWriteHalf, ClientCodec>,
     rx: &mut mpsc::Receiver<DispatcherRequest>,
 ) -> Result<(), tokio::io::Error> {
@@ -123,7 +124,6 @@ async fn sender_task(
         // If failed to prepare request - just go to next
         if connection_data
             .lock()
-            .await
             .try_prepare_request(&mut request, tx)
             .is_err()
         {
@@ -132,7 +132,7 @@ async fn sender_task(
 
         let sync = request.sync;
         let send_res = write_stream.send(request).await;
-        let mut data_lock = connection_data.lock().await;
+        let mut data_lock = connection_data.lock();
         if let Err(err) = Connection::handle_send_result(&mut data_lock, sync, send_res) {
             return Err(err);
         }
@@ -142,13 +142,13 @@ async fn sender_task(
 }
 
 async fn receiver_task(
-    connection_data: BiLock<ConnectionData>,
+    connection_data: &Mutex<ConnectionData>,
     mut read_stream: FramedRead<OwnedReadHalf, ClientCodec>,
 ) -> Result<(), CodecDecodeError> {
     loop {
         match Connection::get_next_stream_value(&mut read_stream).await {
             Ok(x) => {
-                let mut data_lock = connection_data.lock().await;
+                let mut data_lock = connection_data.lock();
                 Connection::handle_response(&mut data_lock, x)
             }
             Err(err) => return Err(err),
@@ -295,24 +295,22 @@ impl Connection {
             data,
         } = self;
 
-        let (mut sender_data_bilock, receiver_data_bilock) = BiLock::new(data);
+        let data_mutex = Mutex::new(data);
 
-        let receiver_fut = tokio::spawn(receiver_task(receiver_data_bilock, read_stream));
+        //let receiver_fut = tokio::spawn(receiver_task(receiver_data_bilock, read_stream));
 
         let res = tokio::select!(
-            res = sender_task(&mut sender_data_bilock, &mut write_stream, rx) => {
+            res = sender_task(&data_mutex, &mut write_stream, rx) => {
                 res.map_err(Into::into)
             }
-            res = receiver_fut => {
-                res.unwrap().map_err(Into::into)
+            //res = receiver_fut => {
+            res = receiver_task(&data_mutex, read_stream) => {
+                res.map_err(Into::into)
             }
         );
 
         if let Some(err) = res.err() {
-            sender_data_bilock
-                .lock()
-                .await
-                .send_error_to_all_in_flights(err);
+            data_mutex.lock().send_error_to_all_in_flights(err);
             Err(())
         } else {
             Ok(())
