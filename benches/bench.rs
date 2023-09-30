@@ -26,7 +26,7 @@ pub fn bench_tarantool_rs(c: &mut Criterion) {
     // Bench logic
     // NOTE: on my PC converting to join add slight overhead (1-2 microseconds for 1 future input)
     // NOTE: on my PC 50 input load tarantool to 50% on single core
-    for parallel in [1, 2, 5, 10, 50].into_iter() {
+    for parallel in [1, 5, 10, 50].into_iter() {
         group.bench_with_input(BenchmarkId::new("ping", parallel), &parallel, |b, p| {
             b.to_async(&tokio_rt).iter(|| async {
                 let make_fut = |_| conn.ping();

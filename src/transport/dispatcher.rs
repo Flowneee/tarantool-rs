@@ -1,22 +1,16 @@
-use std::{fmt::Display, future::Future, pin::Pin, process::Output, time::Duration};
+use std::{fmt::Display, future::Future, pin::Pin, time::Duration};
 
 use backoff::{backoff::Backoff, ExponentialBackoff, ExponentialBackoffBuilder};
-use futures::{Stream, TryFutureExt, TryStreamExt};
+use futures::TryFutureExt;
 use tokio::{
-    io::AsyncReadExt,
-    net::{
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-        TcpStream, ToSocketAddrs,
-    },
+    net::ToSocketAddrs,
     sync::{mpsc, oneshot},
 };
-use tokio_util::codec::{FramedRead, FramedWrite};
-use tracing::{debug, error, trace};
+use tracing::{debug, error};
 
 use super::connection::Connection;
 use crate::{
-    codec::{request::EncodedRequest, response::Response, ClientCodec, Greeting},
-    errors::CodecDecodeError,
+    codec::{request::EncodedRequest, response::Response},
     Error, ReconnectInterval,
 };
 
@@ -120,7 +114,7 @@ impl Dispatcher {
         debug!("Starting dispatcher");
         loop {
             if let Some(conn) = self.conn.take() {
-                if conn.run(&mut self.rx).await {
+                if conn.run(&mut self.rx).await.is_ok() {
                     return;
                 }
             } else {
