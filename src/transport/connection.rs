@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display, time::Duration};
 
-use futures::{future::pending, SinkExt, TryStreamExt};
+use futures::{future::pending, lock::BiLock, SinkExt, TryFutureExt, TryStreamExt};
 use tokio::{
     io::AsyncReadExt,
     net::{
@@ -19,11 +19,12 @@ use tracing::{debug, trace, warn};
 use super::dispatcher::{DispatcherRequest, DispatcherResponse};
 use crate::{
     codec::{
-        request::{Auth, EncodedRequest},
+        request::{self, Auth, EncodedRequest},
         response::{Response, ResponseBody},
         ClientCodec, Greeting,
     },
     errors::{CodecDecodeError, CodecEncodeError, Error},
+    transport::connection,
 };
 
 struct ConnectionData {
@@ -107,13 +108,60 @@ impl ConnectionData {
     }
 }
 
+async fn sender_task(
+    connection_data: &mut BiLock<ConnectionData>,
+    write_stream: &mut FramedWrite<OwnedWriteHalf, ClientCodec>,
+    rx: &mut mpsc::Receiver<DispatcherRequest>,
+) -> Result<(), tokio::io::Error> {
+    while let Some((mut request, tx)) = rx.recv().await {
+        // Check whether tx is closed in case someone cancelled request
+        // while it was in queue
+        if tx.is_closed() {
+            continue;
+        }
+
+        // If failed to prepare request - just go to next
+        if connection_data
+            .lock()
+            .await
+            .try_prepare_request(&mut request, tx)
+            .is_err()
+        {
+            continue;
+        }
+
+        let sync = request.sync;
+        let send_res = write_stream.send(request).await;
+        let mut data_lock = connection_data.lock().await;
+        if let Err(err) = Connection::handle_send_result(&mut data_lock, sync, send_res) {
+            return Err(err);
+        }
+    }
+    debug!("All senders dropped");
+    return Ok(());
+}
+
+async fn receiver_task(
+    connection_data: BiLock<ConnectionData>,
+    mut read_stream: FramedRead<OwnedReadHalf, ClientCodec>,
+) -> Result<(), CodecDecodeError> {
+    loop {
+        match Connection::get_next_stream_value(&mut read_stream).await {
+            Ok(x) => {
+                let mut data_lock = connection_data.lock().await;
+                Connection::handle_response(&mut data_lock, x)
+            }
+            Err(err) => return Err(err),
+        }
+    }
+}
+
 pub(crate) struct Connection {
     read_stream: FramedRead<OwnedReadHalf, ClientCodec>,
     write_stream: FramedWrite<OwnedWriteHalf, ClientCodec>,
     data: ConnectionData,
 }
 
-// TODO: cancel
 impl Connection {
     async fn new_inner<A>(
         addr: A,
@@ -242,53 +290,32 @@ impl Connection {
     /// `Err` means connection was dropped due to some error.
     pub(crate) async fn run(self, rx: &mut mpsc::Receiver<DispatcherRequest>) -> Result<(), ()> {
         let Self {
-            mut read_stream,
-            write_stream,
-            data: mut connection_data,
+            read_stream,
+            mut write_stream,
+            data,
         } = self;
-        let mut write_stream = Some(write_stream);
 
-        let send_fut = Either::Left(pending());
-        pin!(send_fut);
+        let (mut sender_data_bilock, receiver_data_bilock) = BiLock::new(data);
 
-        let err = loop {
-            tokio::select! {
-                next = Self::get_next_stream_value(&mut read_stream) => {
-                    match next {
-                        Ok(x) => Self::handle_response(&mut connection_data, x),
-                        Err(err) => break err,
-                    }
-                }
-                next = rx.recv(), if write_stream.is_some() => {
-                    if let Some((mut request, tx)) = next {
-                        // Check whether tx is closed in case someone cancelled request
-                        // while it was in queue
-                        if !tx.is_closed() {
-                            if connection_data.try_prepare_request(&mut request, tx).is_ok() {
-                                let mut write_stream_ = write_stream.take().unwrap();
-                                send_fut.set(Either::Right(async move {
-                                    let sync = request.sync;
-                                    let send_res = write_stream_.send(request).await;
-                                    (send_res, sync, write_stream_)
-                                }));
-                            }
-                        }
-                    } else {
-                        debug!("All senders dropped");
-                        return Ok(())
-                    }
-                }
-                (send_res, sync, write_stream_) = &mut send_fut => {
-                    send_fut.set(Either::Left(pending()));
-                    write_stream = Some(write_stream_);
+        let receiver_fut = tokio::spawn(receiver_task(receiver_data_bilock, read_stream));
 
-                    if let Err(err) = Self::handle_send_result(&mut connection_data, sync, send_res) {
-                        break err.into();
-                    }
-                }
+        let res = tokio::select!(
+            res = sender_task(&mut sender_data_bilock, &mut write_stream, rx) => {
+                res.map_err(Into::into)
             }
-        };
-        connection_data.send_error_to_all_in_flights(err);
-        Err(())
+            res = receiver_fut => {
+                res.unwrap().map_err(Into::into)
+            }
+        );
+
+        if let Some(err) = res.err() {
+            sender_data_bilock
+                .lock()
+                .await
+                .send_error_to_all_in_flights(err);
+            Err(())
+        } else {
+            Ok(())
+        }
     }
 }
