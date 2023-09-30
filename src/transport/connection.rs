@@ -1,30 +1,25 @@
 use std::{collections::HashMap, fmt::Display, time::Duration};
 
-use futures::{future::pending, lock::BiLock, SinkExt, TryFutureExt, TryStreamExt};
+use futures::{lock::BiLock, SinkExt, TryStreamExt};
 use tokio::{
-    io::AsyncReadExt,
+    io::{AsyncRead, AsyncReadExt},
     net::{
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
+        tcp::{OwnedReadHalf, OwnedWriteHalf, ReadHalf, WriteHalf},
         TcpStream, ToSocketAddrs,
     },
-    pin,
     sync::{mpsc, oneshot},
 };
-use tokio_util::{
-    codec::{FramedRead, FramedWrite},
-    either::Either,
-};
+use tokio_util::codec::{Framed, FramedRead, FramedWrite};
 use tracing::{debug, trace, warn};
 
 use super::dispatcher::{DispatcherRequest, DispatcherResponse};
 use crate::{
     codec::{
-        request::{self, Auth, EncodedRequest},
+        request::{Auth, EncodedRequest},
         response::{Response, ResponseBody},
         ClientCodec, Greeting,
     },
     errors::{CodecDecodeError, CodecEncodeError, Error},
-    transport::connection,
 };
 
 struct ConnectionData {
@@ -110,7 +105,7 @@ impl ConnectionData {
 
 async fn sender_task(
     connection_data: &mut BiLock<ConnectionData>,
-    write_stream: &mut FramedWrite<OwnedWriteHalf, ClientCodec>,
+    write_stream: &mut FramedWrite<WriteHalf<'_>, ClientCodec>,
     rx: &mut mpsc::Receiver<DispatcherRequest>,
 ) -> Result<(), tokio::io::Error> {
     while let Some((mut request, tx)) = rx.recv().await {
@@ -143,7 +138,7 @@ async fn sender_task(
 
 async fn receiver_task(
     connection_data: BiLock<ConnectionData>,
-    mut read_stream: FramedRead<OwnedReadHalf, ClientCodec>,
+    mut read_stream: FramedRead<ReadHalf<'_>, ClientCodec>,
 ) -> Result<(), CodecDecodeError> {
     loop {
         match Connection::get_next_stream_value(&mut read_stream).await {
@@ -264,8 +259,8 @@ impl Connection {
     }
 
     #[inline]
-    async fn get_next_stream_value(
-        read_stream: &mut FramedRead<OwnedReadHalf, ClientCodec>,
+    async fn get_next_stream_value<T: AsyncRead + Unpin>(
+        read_stream: &mut FramedRead<T, ClientCodec>,
     ) -> Result<Response, CodecDecodeError> {
         match read_stream.try_next().await {
             Ok(Some(x)) => Ok(x),
@@ -295,16 +290,25 @@ impl Connection {
             data,
         } = self;
 
+        let read = read_stream.into_inner();
+        let write = write_stream.into_inner();
+        let mut tcp = read.reunite(write).unwrap();
+        let (read_stream, write_stream) = tcp.split();
+        let mut read_stream = FramedRead::new(read_stream, ClientCodec::default());
+        let mut write_stream = FramedWrite::new(write_stream, ClientCodec::default());
+
         let (mut sender_data_bilock, receiver_data_bilock) = BiLock::new(data);
 
-        let receiver_fut = tokio::spawn(receiver_task(receiver_data_bilock, read_stream));
+        //let receiver_fut = tokio::spawn(receiver_task(receiver_data_bilock, read_stream));
 
         let res = tokio::select!(
             res = sender_task(&mut sender_data_bilock, &mut write_stream, rx) => {
                 res.map_err(Into::into)
             }
-            res = receiver_fut => {
-                res.unwrap().map_err(Into::into)
+            //res = receiver_fut => {
+            res = receiver_task(receiver_data_bilock, read_stream) => {
+                //res.unwrap().map_err(Into::into)
+                res.map_err(Into::into)
             }
         );
 
