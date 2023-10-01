@@ -62,3 +62,7 @@ harness = false
 [[bench]]
 name = "compare"
 harness = false
+
+[[bench]]
+name = "simple_loop"
+harness = false
