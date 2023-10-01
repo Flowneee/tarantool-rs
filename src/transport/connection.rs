@@ -1,16 +1,18 @@
-use std::{collections::HashMap, fmt::Display, sync::Arc, time::Duration};
+use std::{collections::HashMap, fmt::Display, future::ready, sync::Arc, time::Duration};
 
-use futures::{future::pending, lock::BiLock, SinkExt, TryFutureExt, TryStreamExt};
+use futures::{future::pending, lock::BiLock, SinkExt, StreamExt, TryFutureExt, TryStreamExt};
 use parking_lot::Mutex;
 use tokio::{
-    io::AsyncReadExt,
+    io::{AsyncReadExt, AsyncWriteExt},
     net::{
         tcp::{OwnedReadHalf, OwnedWriteHalf},
         TcpStream, ToSocketAddrs,
     },
     pin,
     sync::{mpsc, oneshot},
+    task::JoinHandle,
 };
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::{
     codec::{FramedRead, FramedWrite},
     either::Either,
@@ -109,56 +111,73 @@ impl ConnectionData {
     }
 }
 
-async fn sender_task(
-    connection_data: &Mutex<ConnectionData>,
-    write_stream: &mut FramedWrite<OwnedWriteHalf, ClientCodec>,
-    rx: &mut mpsc::Receiver<DispatcherRequest>,
-) -> Result<(), tokio::io::Error> {
-    while let Some((mut request, tx)) = rx.recv().await {
-        // Check whether tx is closed in case someone cancelled request
-        // while it was in queue
-        if tx.is_closed() {
-            continue;
-        }
+// async fn sender_task(
+//     connection_data: &Mutex<ConnectionData>,
+//     write_stream: &mut FramedWrite<OwnedWriteHalf, ClientCodec>,
+//     rx: &mut mpsc::Receiver<DispatcherRequest>,
+// ) -> Result<(), tokio::io::Error> {
+//     while let Some((mut request, tx)) = rx.recv().await {
+//         // Check whether tx is closed in case someone cancelled request
+//         // while it was in queue
+//         if tx.is_closed() {
+//             continue;
+//         }
 
-        // If failed to prepare request - just go to next
-        if connection_data
-            .lock()
-            .try_prepare_request(&mut request, tx)
-            .is_err()
-        {
-            continue;
-        }
+//         // If failed to prepare request - just go to next
+//         if connection_data
+//             .lock()
+//             .try_prepare_request(&mut request, tx)
+//             .is_err()
+//         {
+//             continue;
+//         }
 
-        let sync = request.sync;
-        let send_res = write_stream.send(request).await;
-        let mut data_lock = connection_data.lock();
-        if let Err(err) = Connection::handle_send_result(&mut data_lock, sync, send_res) {
-            return Err(err);
-        }
+//         let sync = request.sync;
+//         let send_res = write_stream.send(request).await;
+//         let mut data_lock = connection_data.lock();
+//         if let Err(err) = Connection::handle_send_result(&mut data_lock, sync, send_res) {
+//             return Err(err);
+//         }
+//     }
+//     debug!("All senders dropped");
+//     return Ok(());
+// }
+
+// async fn receiver_task(
+//     connection_data: &Mutex<ConnectionData>,
+//     mut read_stream: FramedRead<OwnedReadHalf, ClientCodec>,
+// ) -> Result<(), CodecDecodeError> {
+//     loop {
+//         match Connection::get_next_stream_value(&mut read_stream).await {
+//             Ok(x) => {
+//                 let mut data_lock = connection_data.lock();
+//                 Connection::handle_response(&mut data_lock, x)
+//             }
+//             Err(err) => return Err(err),
+//         }
+//     }
+// }
+
+async fn writer_task(
+    mut rx: mpsc::Receiver<EncodedRequest>,
+    mut stream: FramedWrite<OwnedWriteHalf, ClientCodec>,
+) -> Result<(), (u32, CodecEncodeError)> {
+    while let Some(x) = rx.recv().await {
+        let sync = x.sync;
+        stream.send(x).await.map_err(|err| (sync, err))?;
     }
-    debug!("All senders dropped");
-    return Ok(());
-}
 
-async fn receiver_task(
-    connection_data: &Mutex<ConnectionData>,
-    mut read_stream: FramedRead<OwnedReadHalf, ClientCodec>,
-) -> Result<(), CodecDecodeError> {
-    loop {
-        match Connection::get_next_stream_value(&mut read_stream).await {
-            Ok(x) => {
-                let mut data_lock = connection_data.lock();
-                Connection::handle_response(&mut data_lock, x)
-            }
-            Err(err) => return Err(err),
-        }
+    if let Err(err) = stream.into_inner().shutdown().await {
+        warn!("Failed to shutdown TCP stream cleanly: {err}");
     }
+
+    Ok(())
 }
 
 pub(crate) struct Connection {
     read_stream: FramedRead<OwnedReadHalf, ClientCodec>,
-    write_stream: FramedWrite<OwnedWriteHalf, ClientCodec>,
+    writer_tx: mpsc::Sender<EncodedRequest>,
+    writer_task_handle: JoinHandle<Result<(), (u32, CodecEncodeError)>>,
     data: ConnectionData,
 }
 
@@ -199,9 +218,13 @@ impl Connection {
             .await?;
         }
 
+        let (writer_tx, writer_rx) = mpsc::channel(500);
+        let writer_task_handle = tokio::spawn(writer_task(writer_rx, write_stream));
+
         let this = Self {
             read_stream,
-            write_stream,
+            writer_tx,
+            writer_task_handle,
             data: conn_data,
         };
 
@@ -288,32 +311,68 @@ impl Connection {
     ///
     /// `Ok` means `rx` was closed and connection should not be restarted.
     /// `Err` means connection was dropped due to some error.
-    pub(crate) async fn run(self, rx: &mut mpsc::Receiver<DispatcherRequest>) -> Result<(), ()> {
+    pub(crate) async fn run(
+        self,
+        client_rx: &mut ReceiverStream<DispatcherRequest>,
+    ) -> Result<(), ()> {
         let Self {
-            read_stream,
-            mut write_stream,
-            data,
+            mut read_stream,
+            writer_tx,
+            mut writer_task_handle,
+            mut data,
         } = self;
 
-        let data_mutex = Mutex::new(data);
+        let client_rx_filtered = client_rx.filter(|(_, tx)| ready(!tx.is_closed()));
+        pin!(client_rx_filtered);
 
-        //let receiver_fut = tokio::spawn(receiver_task(receiver_data_bilock, read_stream));
+        let err = loop {
+            tokio::select! {
+                // Read value from TCP stream
+                next = Connection::get_next_stream_value(&mut read_stream) => {
+                    match next {
+                        Ok(x) => Connection::handle_response(&mut data, x),
+                        Err(err) => break err,
+                    }
+                }
+                // Read value from internal queue
+                next = client_rx_filtered.next() => {
+                    if let Some((mut request, tx)) = next {
+                        // If failed to prepare request - just go to next
+                        if data
+                            .try_prepare_request(&mut request, tx)
+                            .is_err()
+                        {
+                            continue;
+                        }
 
-        let res = tokio::select!(
-            res = sender_task(&data_mutex, &mut write_stream, rx) => {
-                res.map_err(Into::into)
+                        let sync = request.sync;
+                        let _send_res = writer_tx.send(request).await;
+                        // FIXME: Ok(())
+                        if let Err(err) = Connection::handle_send_result(&mut data, sync, Ok(())) {
+                            break err.into();
+                        }
+                    } else {
+                        // TODO: actually don't quit until all in-flights processed
+                        debug!("All senders dropped");
+                        return Ok(());
+                    }
+                }
+                writer_result = &mut writer_task_handle => {
+                    match writer_result {
+                        Err(_) => {
+                            todo!("handle result")
+                        },
+                        Ok(Err((sync, err))) => {
+                            todo!("handle result")
+                        },
+                        _ => {}
+                    }
+                    break CodecDecodeError::Closed
+                }
             }
-            //res = receiver_fut => {
-            res = receiver_task(&data_mutex, read_stream) => {
-                res.map_err(Into::into)
-            }
-        );
+        };
 
-        if let Some(err) = res.err() {
-            data_mutex.lock().send_error_to_all_in_flights(err);
-            Err(())
-        } else {
-            Ok(())
-        }
+        data.send_error_to_all_in_flights(err);
+        Err(())
     }
 }

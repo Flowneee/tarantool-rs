@@ -6,6 +6,7 @@ use tokio::{
     net::ToSocketAddrs,
     sync::{mpsc, oneshot},
 };
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, error};
 
 use super::connection::Connection;
@@ -43,7 +44,7 @@ type ConnectDynFuture = dyn Future<Output = Result<Connection, Error>> + Send;
 ///
 /// Currently no-op, in future it should handle reconnects, schema reloading, pooling.
 pub(crate) struct Dispatcher {
-    rx: mpsc::Receiver<DispatcherRequest>,
+    rx: ReceiverStream<DispatcherRequest>,
     conn: Option<Connection>,
     conn_factory: Box<dyn Fn() -> Pin<Box<ConnectDynFuture>> + Send + Sync>,
     reconnect_interval: Option<ReconnectInterval>,
@@ -79,7 +80,7 @@ impl Dispatcher {
 
         Ok((
             Self {
-                rx,
+                rx: ReceiverStream::new(rx),
                 conn: Some(conn),
                 conn_factory,
                 reconnect_interval,
