@@ -1,6 +1,10 @@
 use std::{collections::HashMap, fmt::Display, future::ready, sync::Arc, time::Duration};
 
-use futures::{future::pending, lock::BiLock, SinkExt, StreamExt, TryFutureExt, TryStreamExt};
+use futures::{
+    future::{pending, Fuse, FusedFuture},
+    lock::BiLock,
+    FutureExt, SinkExt, StreamExt, TryFutureExt, TryStreamExt,
+};
 use parking_lot::Mutex;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -114,53 +118,6 @@ impl ConnectionData {
     }
 }
 
-// async fn sender_task(
-//     connection_data: &Mutex<ConnectionData>,
-//     write_stream: &mut FramedWrite<OwnedWriteHalf, ClientCodec>,
-//     rx: &mut mpsc::Receiver<DispatcherRequest>,
-// ) -> Result<(), tokio::io::Error> {
-//     while let Some((mut request, tx)) = rx.recv().await {
-//         // Check whether tx is closed in case someone cancelled request
-//         // while it was in queue
-//         if tx.is_closed() {
-//             continue;
-//         }
-
-//         // If failed to prepare request - just go to next
-//         if connection_data
-//             .lock()
-//             .try_prepare_request(&mut request, tx)
-//             .is_err()
-//         {
-//             continue;
-//         }
-
-//         let sync = request.sync;
-//         let send_res = write_stream.send(request).await;
-//         let mut data_lock = connection_data.lock();
-//         if let Err(err) = Connection::handle_send_result(&mut data_lock, sync, send_res) {
-//             return Err(err);
-//         }
-//     }
-//     debug!("All senders dropped");
-//     return Ok(());
-// }
-
-// async fn receiver_task(
-//     connection_data: &Mutex<ConnectionData>,
-//     mut read_stream: FramedRead<OwnedReadHalf, ClientCodec>,
-// ) -> Result<(), CodecDecodeError> {
-//     loop {
-//         match Connection::get_next_stream_value(&mut read_stream).await {
-//             Ok(x) => {
-//                 let mut data_lock = connection_data.lock();
-//                 Connection::handle_response(&mut data_lock, x)
-//             }
-//             Err(err) => return Err(err),
-//         }
-//     }
-// }
-
 async fn writer_task(
     mut rx: mpsc::Receiver<EncodedRequest>,
     mut stream: FramedWrite<OwnedWriteHalf, ClientCodec>,
@@ -221,7 +178,7 @@ impl Connection {
             .await?;
         }
 
-        let (writer_tx, writer_rx) = mpsc::channel(1100);
+        let (writer_tx, writer_rx) = mpsc::channel(1000);
         let writer_task_handle = tokio::spawn(writer_task(writer_rx, write_stream));
 
         let this = Self {
@@ -328,17 +285,10 @@ impl Connection {
         let client_rx_filtered = client_rx.filter(|(_, tx)| ready(!tx.is_closed()));
         pin!(client_rx_filtered);
 
-        let mut next_request_to_write = None;
-        let mut permit: Option<Permit<_>> = None;
+        let send_to_writer_future = Fuse::terminated();
+        pin!(send_to_writer_future);
 
         let err = loop {
-            if next_request_to_write.is_some() && permit.is_some() {
-                permit
-                    .take()
-                    .unwrap()
-                    .send(next_request_to_write.take().unwrap());
-            }
-
             tokio::select! {
                 // Read value from TCP stream
                 next = Connection::get_next_stream_value(&mut read_stream) => {
@@ -347,19 +297,8 @@ impl Connection {
                         Err(err) => break err,
                     }
                 }
-                // Get permit to send request to writer
-                permit_res = writer_tx.reserve(), if permit.is_none() => {
-                    match permit_res {
-                        Ok(x) => {
-                            permit = Some(x);
-                        },
-                        Err(err) => {
-                            todo!("throw error");
-                        }
-                    }
-                }
-                // Read value from internal queue
-                next = client_rx_filtered.next(), if next_request_to_write.is_none() => {
+                // Read value from internal queue if nothing being sent to writer
+                next = client_rx_filtered.next(), if send_to_writer_future.is_terminated() => {
                     if let Some((mut request, tx)) = next {
                         // If failed to prepare request - just go to next
                         if data
@@ -369,18 +308,18 @@ impl Connection {
                             continue;
                         }
 
-                        let sync = request.sync;
-                        next_request_to_write = Some(request);
-                        // let _send_res = writer_tx.send(request).await;
-                        // // FIXME: Ok(())
-                        // if let Err(err) = Connection::handle_send_result(&mut data, sync, Ok(())) {
-                        //     break err.into();
-                        // }
+                        send_to_writer_future.set(writer_tx.send(request).fuse());
                     } else {
                         // TODO: actually don't quit until all in-flights processed
                         debug!("All senders dropped");
                         return Ok(());
                     }
+                }
+                send_res = &mut send_to_writer_future, if !send_to_writer_future.is_terminated() => {
+                    // TODO: handle send_res
+                    // if let Err(err) = Connection::handle_send_result(&mut data, sync, Ok(())) {
+                    //     break err.into();
+                    // }
                 }
                 writer_result = &mut writer_task_handle => {
                     match writer_result {
