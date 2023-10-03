@@ -16,7 +16,7 @@ async-trait = "0.1"
 backoff = "0.4"
 base64 = "0.21"
 bytes = "1"
-futures = { version = "0.3", features = ["unstable", "bilock"] }
+futures = "0.3"
 lru = "0.11"
 parking_lot = { version = "0.12", features = ["send_guard"] }
 rmp = "0.8"
@@ -26,7 +26,7 @@ serde = { version = "1", features = ["derive"] }
 sha-1 = "0.10"
 thiserror = "1"
 tokio = { version = "1", features = ["rt", "net", "io-util", "macros", "time"] }
-tokio-stream = "0.1.14"
+tokio-stream = "0.1"
 tokio-util = { version = "0.7", default-features = false, features = ["codec"] }
 tracing = { version = "0.1", features = ["log"] }
 
