@@ -31,7 +31,7 @@ pub fn compare_tarantool_rs_and_rusty_tarantool(c: &mut Criterion) {
     // Bench logic
     // NOTE: on my PC converting to join add slight overhead (1-2 microseconds for 1 future input)
     // NOTE: on my PC 50 input load tarantool to 50% on single core
-    for parallel in [1, 2, 5, 10, 50].into_iter() {
+    for parallel in [1, 50, 250, 1000].into_iter() {
         group.bench_with_input(
             BenchmarkId::new("tarantool_rs ping", parallel),
             &parallel,

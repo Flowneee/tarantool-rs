@@ -1,7 +1,9 @@
-use std::{collections::HashMap, fmt::Display, future::ready, sync::Arc, time::Duration};
+use std::{collections::HashMap, fmt::Display, future::ready, time::Duration};
 
-use futures::{future::pending, lock::BiLock, SinkExt, StreamExt, TryFutureExt, TryStreamExt};
-use parking_lot::Mutex;
+use futures::{
+    future::{Fuse, FusedFuture},
+    FutureExt, SinkExt, StreamExt, TryStreamExt,
+};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{
@@ -16,21 +18,17 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::{
-    codec::{FramedRead, FramedWrite},
-    either::Either,
-};
+use tokio_util::codec::{FramedRead, FramedWrite};
 use tracing::{debug, trace, warn};
 
 use super::dispatcher::{DispatcherRequest, DispatcherResponse};
 use crate::{
     codec::{
-        request::{self, Auth, EncodedRequest},
+        request::{Auth, EncodedRequest},
         response::{Response, ResponseBody},
         ClientCodec, Greeting,
     },
     errors::{CodecDecodeError, CodecEncodeError, Error},
-    transport::connection,
 };
 
 struct ConnectionData {
@@ -179,8 +177,9 @@ async fn writer_task(
 
 pub(crate) struct Connection {
     read_stream: FramedRead<OwnedReadHalf, ClientCodec>,
-    writer_tx: mpsc::Sender<EncodedRequest>,
-    writer_task_handle: JoinHandle<Result<(), (u32, CodecEncodeError)>>,
+    write_stream: FramedWrite<OwnedWriteHalf, ClientCodec>,
+    //writer_tx: mpsc::Sender<EncodedRequest>,
+    //writer_task_handle: JoinHandle<Result<(), (u32, CodecEncodeError)>>,
     data: ConnectionData,
 }
 
@@ -221,13 +220,13 @@ impl Connection {
             .await?;
         }
 
-        let (writer_tx, writer_rx) = mpsc::channel(1100);
-        let writer_task_handle = tokio::spawn(writer_task(writer_rx, write_stream));
+        //let writer_task_handle = tokio::spawn(writer_task(writer_rx, write_stream));
 
         let this = Self {
             read_stream,
-            writer_tx,
-            writer_task_handle,
+            //writer_tx,
+            write_stream,
+            //writer_task_handle,
             data: conn_data,
         };
 
@@ -320,25 +319,18 @@ impl Connection {
     ) -> Result<(), ()> {
         let Self {
             mut read_stream,
-            writer_tx,
-            mut writer_task_handle,
+            mut write_stream,
+            // writer_tx,
+            // mut writer_task_handle,
             mut data,
         } = self;
 
         let client_rx_filtered = client_rx.filter(|(_, tx)| ready(!tx.is_closed()));
         pin!(client_rx_filtered);
 
-        let mut next_request_to_write = None;
-        let mut permit: Option<Permit<_>> = None;
+        let mut send_future = Fuse::terminated();
 
         let err = loop {
-            if next_request_to_write.is_some() && permit.is_some() {
-                permit
-                    .take()
-                    .unwrap()
-                    .send(next_request_to_write.take().unwrap());
-            }
-
             tokio::select! {
                 // Read value from TCP stream
                 next = Connection::get_next_stream_value(&mut read_stream) => {
@@ -347,19 +339,8 @@ impl Connection {
                         Err(err) => break err,
                     }
                 }
-                // Get permit to send request to writer
-                permit_res = writer_tx.reserve(), if permit.is_none() => {
-                    match permit_res {
-                        Ok(x) => {
-                            permit = Some(x);
-                        },
-                        Err(err) => {
-                            todo!("throw error");
-                        }
-                    }
-                }
                 // Read value from internal queue
-                next = client_rx_filtered.next(), if next_request_to_write.is_none() => {
+                next = client_rx_filtered.next(), if send_future.is_terminated() => {
                     if let Some((mut request, tx)) = next {
                         // If failed to prepare request - just go to next
                         if data
@@ -370,29 +351,18 @@ impl Connection {
                         }
 
                         let sync = request.sync;
-                        next_request_to_write = Some(request);
-                        // let _send_res = writer_tx.send(request).await;
-                        // // FIXME: Ok(())
-                        // if let Err(err) = Connection::handle_send_result(&mut data, sync, Ok(())) {
-                        //     break err.into();
-                        // }
+                        send_future = write_stream.send(request).map(move |res| (sync, res)).fuse();
                     } else {
                         // TODO: actually don't quit until all in-flights processed
                         debug!("All senders dropped");
                         return Ok(());
                     }
                 }
-                writer_result = &mut writer_task_handle => {
-                    match writer_result {
-                        Err(_) => {
-                            todo!("handle result")
-                        },
-                        Ok(Err((sync, err))) => {
-                            todo!("handle result")
-                        },
-                        _ => {}
+                (sync, res) = &mut send_future => {
+                    // TODO: check result correctness
+                    if let Err(err) = Connection::handle_send_result(&mut data, sync, res) {
+                        break err.into();
                     }
-                    break CodecDecodeError::Closed
                 }
             }
         };
