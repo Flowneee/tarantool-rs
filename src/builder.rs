@@ -67,7 +67,7 @@ pub struct ConnectionBuilder {
     connect_timeout: Option<Duration>,
     reconnect_interval: Option<ReconnectInterval>,
     sql_statement_cache_capacity: usize,
-    dispatcher_internal_queue_size: usize,
+    internal_simultaneous_requests_threshold: usize,
 }
 
 impl Default for ConnectionBuilder {
@@ -81,7 +81,7 @@ impl Default for ConnectionBuilder {
             connect_timeout: None,
             reconnect_interval: Some(ReconnectInterval::default()),
             sql_statement_cache_capacity: DEFAULT_SQL_STATEMENT_CACHE_CAPACITY,
-            dispatcher_internal_queue_size: DEFAULT_DISPATCHER_INTERNAL_QUEUE_SIZE,
+            internal_simultaneous_requests_threshold: DEFAULT_DISPATCHER_INTERNAL_QUEUE_SIZE,
         }
     }
 }
@@ -92,17 +92,18 @@ impl ConnectionBuilder {
     where
         A: ToSocketAddrs + Display + Clone + Send + Sync + 'static,
     {
-        let (dispatcher, disaptcher_sender) = Dispatcher::new(
+        let (dispatcher_fut, disaptcher_sender) = Dispatcher::prepare(
             addr,
             self.user.as_deref(),
             self.password.as_deref(),
             self.timeout,
             self.reconnect_interval.clone(),
+            self.internal_simultaneous_requests_threshold,
         )
         .await?;
 
         // TODO: support setting custom executor
-        tokio::spawn(dispatcher.run());
+        tokio::spawn(dispatcher_fut);
         let conn = Connection::new(
             disaptcher_sender,
             self.timeout,
@@ -194,16 +195,20 @@ impl ConnectionBuilder {
         self
     }
 
-    /// Sets size of the internal queue between connection and dispatcher.
+    /// Prepare `Connection` to process `value` number of simultaneously created requests.
     ///
-    /// This queue contains all requests, made from [`Connection`]s/[`Stream`]s/etc.
-    /// Increasing its size can help if you have a lot of requests, made concurrently
-    /// and frequently, however this will increase memory consumption slightly.
+    /// It is not hard limit, but making more simultaneous requests than this value
+    /// will result in degradation in performance, so try to increase this value,
+    /// if you unsatisfied with performance.
+    ///
+    /// Internally connection have multiple bounded channels, and this parameter mostly
+    /// affect size of this channels. Increasing this value can help if you have a lot of simultaneously
+    /// created requests, however this will increase memory consumption.
     ///
     /// By default set to 500, which should be reasonable compromise between memory
-    /// (about 50 KB) and performance.
-    pub fn dispatcher_internal_queue_size(&mut self, size: usize) -> &mut Self {
-        self.dispatcher_internal_queue_size = size;
+    /// (about 100 KB) and performance.
+    pub fn internal_simultaneous_requests_threshold(&mut self, value: usize) -> &mut Self {
+        self.internal_simultaneous_requests_threshold = value;
         self
     }
 }

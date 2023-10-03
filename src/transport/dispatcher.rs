@@ -6,6 +6,7 @@ use tokio::{
     net::ToSocketAddrs,
     sync::{mpsc, oneshot},
 };
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, error};
 
 use super::connection::Connection;
@@ -43,20 +44,21 @@ type ConnectDynFuture = dyn Future<Output = Result<Connection, Error>> + Send;
 ///
 /// Currently no-op, in future it should handle reconnects, schema reloading, pooling.
 pub(crate) struct Dispatcher {
-    rx: mpsc::Receiver<DispatcherRequest>,
-    conn: Connection,
+    rx: ReceiverStream<DispatcherRequest>,
+    conn: Option<Connection>,
     conn_factory: Box<dyn Fn() -> Pin<Box<ConnectDynFuture>> + Send + Sync>,
     reconnect_interval: Option<ReconnectInterval>,
 }
 
 impl Dispatcher {
-    pub(crate) async fn new<A>(
+    pub(crate) async fn prepare<A>(
         addr: A,
         user: Option<&str>,
         password: Option<&str>,
         connect_timeout: Option<Duration>,
         reconnect_interval: Option<ReconnectInterval>,
-    ) -> Result<(Self, DispatcherSender), Error>
+        internal_simultaneous_requests_threshold: usize,
+    ) -> Result<(impl Future<Output = ()>, DispatcherSender), Error>
     where
         A: ToSocketAddrs + Display + Clone + Send + Sync + 'static,
     {
@@ -68,22 +70,29 @@ impl Dispatcher {
             let password = password.clone();
             let connect_timeout = connect_timeout;
             Box::pin(async move {
-                Connection::new(addr, user.as_deref(), password.as_deref(), connect_timeout).await
+                Connection::new(
+                    addr,
+                    user.as_deref(),
+                    password.as_deref(),
+                    connect_timeout,
+                    internal_simultaneous_requests_threshold,
+                )
+                .await
             }) as Pin<Box<ConnectDynFuture>>
         });
 
         let conn = conn_factory().await?;
 
-        // TODO: test whether increased size can help with performance
-        let (tx, rx) = mpsc::channel(1);
+        let (tx, rx) = mpsc::channel(internal_simultaneous_requests_threshold);
 
         Ok((
             Self {
-                rx,
-                conn,
+                rx: ReceiverStream::new(rx),
+                conn: Some(conn),
                 conn_factory,
                 reconnect_interval,
-            },
+            }
+            .run(),
             DispatcherSender { tx },
         ))
     }
@@ -96,7 +105,7 @@ impl Dispatcher {
         loop {
             match (self.conn_factory)().await {
                 Ok(conn) => {
-                    self.conn = conn;
+                    self.conn = Some(conn);
                     return;
                 }
                 Err(err) => {
@@ -112,39 +121,14 @@ impl Dispatcher {
     pub(crate) async fn run(mut self) {
         debug!("Starting dispatcher");
         loop {
-            if self.run_conn().await {
-                return;
+            if let Some(conn) = self.conn.take() {
+                if conn.run(&mut self.rx).await.is_ok() {
+                    return;
+                }
+            } else {
+                self.reconnect().await;
             }
-            self.reconnect().await;
         }
-    }
-
-    pub(crate) async fn run_conn(&mut self) -> bool {
-        let err = loop {
-            tokio::select! {
-                next = self.conn.handle_next_response() => {
-                    if let Err(e) = next {
-                        break e;
-                    }
-                }
-                next = self.rx.recv() => {
-                    if let Some((request, tx)) = next {
-                        // Check whether tx is closed in case someone cancelled request
-                        // while it was in queue
-                        if !tx.is_closed() {
-                            if let Err(err) = self.conn.send_request(request, tx).await {
-                                break err.into();
-                            }
-                        }
-                    } else {
-                        debug!("All senders dropped");
-                        return true
-                    }
-                }
-            }
-        };
-        self.conn.finish_with_error(err);
-        false
     }
 }
 

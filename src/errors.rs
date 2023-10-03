@@ -7,7 +7,7 @@ use rmp::{
     encode::{RmpWriteErr, ValueWriteError},
 };
 use rmpv::Value;
-use tokio::time::error::Elapsed;
+use tokio::{task::JoinError, time::error::Elapsed};
 
 /// Error returned by Tarantool in response to a request.
 #[derive(Clone, Debug, thiserror::Error)]
@@ -66,8 +66,8 @@ pub enum Error {
     SpaceMissingPrimaryIndex,
 
     /// Underlying TCP connection closed.
-    #[error("TCP connection error")]
-    ConnectionError(#[from] Arc<tokio::io::Error>),
+    #[error("TCP connection IO error")]
+    Io(#[from] Arc<tokio::io::Error>),
     /// Underlying TCP connection was closed.
     #[error("TCP connection closed")]
     ConnectionClosed,
@@ -79,7 +79,7 @@ pub enum Error {
 
 impl From<tokio::io::Error> for Error {
     fn from(v: tokio::io::Error) -> Self {
-        Self::ConnectionError(Arc::new(v))
+        Self::Io(Arc::new(v))
     }
 }
 
@@ -87,7 +87,6 @@ impl From<CodecDecodeError> for Error {
     fn from(value: CodecDecodeError) -> Self {
         match value {
             CodecDecodeError::Io(x) => x.into(),
-            CodecDecodeError::Closed => Self::ConnectionClosed,
             CodecDecodeError::Decode(x) => x.into(),
         }
     }
@@ -98,6 +97,17 @@ impl From<CodecEncodeError> for Error {
         match value {
             CodecEncodeError::Io(x) => x.into(),
             CodecEncodeError::Encode(x) => x.into(),
+        }
+    }
+}
+
+impl From<ConnectionError> for Error {
+    fn from(value: ConnectionError) -> Self {
+        match value {
+            ConnectionError::Io(x) => x.into(),
+            ConnectionError::ConnectionClosed => Self::ConnectionClosed,
+            ConnectionError::Decode(x) => x.into(),
+            err @ ConnectionError::JoinError(_) => Self::Other(err.into()),
         }
     }
 }
@@ -296,28 +306,53 @@ impl DecodingErrorLocation {
 }
 
 /// Helper type to return errors from decoder.
-#[derive(Clone)]
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum CodecDecodeError {
-    Io(Arc<tokio::io::Error>),
-    Closed,
-    Decode(DecodingError),
-}
-
-impl From<tokio::io::Error> for CodecDecodeError {
-    fn from(v: tokio::io::Error) -> Self {
-        Self::Io(Arc::new(v))
-    }
+    #[error(transparent)]
+    Io(#[from] tokio::io::Error),
+    #[error(transparent)]
+    Decode(#[from] DecodingError),
 }
 
 /// Helper type to return errors from encoder.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum CodecEncodeError {
-    Io(tokio::io::Error),
-    Encode(EncodingError),
+    #[error(transparent)]
+    Io(#[from] tokio::io::Error),
+    #[error(transparent)]
+    Encode(#[from] EncodingError),
 }
 
-impl From<tokio::io::Error> for CodecEncodeError {
-    fn from(v: tokio::io::Error) -> Self {
-        Self::Io(v)
+/// Error type, returned to client from connection.
+#[derive(Clone, Debug, thiserror::Error)]
+pub(crate) enum ConnectionError {
+    #[error(transparent)]
+    Io(Arc<tokio::io::Error>),
+    #[error("Connection closed")]
+    ConnectionClosed,
+    #[error(transparent)]
+    Decode(#[from] DecodingError),
+    #[error("Tokio JoinHandle error: {0:?}")]
+    JoinError(#[source] Arc<JoinError>),
+}
+
+impl From<tokio::io::Error> for ConnectionError {
+    fn from(value: tokio::io::Error) -> Self {
+        Self::Io(Arc::new(value))
+    }
+}
+
+impl From<CodecDecodeError> for ConnectionError {
+    fn from(value: CodecDecodeError) -> Self {
+        match value {
+            CodecDecodeError::Io(x) => x.into(),
+            CodecDecodeError::Decode(x) => x.into(),
+        }
+    }
+}
+
+impl From<JoinError> for ConnectionError {
+    fn from(value: JoinError) -> Self {
+        Self::JoinError(Arc::new(value))
     }
 }

@@ -5,12 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.0.9] - 2023-09-23
+## [0.0.10] - 2023-10-04
 ### Added
- - `dispatcher_internal_queue_size` parameter to builder, allowing to customize size of internal queue between dispatcher and connection.
+ - `internal_simultaneous_requests_threshold` parameter to builder, which allow to customize maximum number of simultaneously created requests, which connection can effectively handle.
+
+### Changed
+ - Rewritten internal logic of connection to Tarantool, which improved performance separated reading and writing to socket into separate tasks.
 
 ### Fixed
- - Increased size of internal queue between dispatcher and connection, which should significantly increase performance (previously it was degrading rapidly with a lot of parallel requests).
+ - Increased size of internal channel between dispatcher and connection, which should significantly increase performance (previously it was degrading rapidly with a lot of concurrent requests).
+
+
+## [0.0.9] - 2023-09-23 (broken, yanked)
 
 
 ## [0.0.8] - 2023-09-05
