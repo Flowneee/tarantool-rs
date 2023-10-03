@@ -51,13 +51,13 @@ pub(crate) struct Dispatcher {
 }
 
 impl Dispatcher {
-    pub(crate) async fn new<A>(
+    pub(crate) async fn prepare<A>(
         addr: A,
         user: Option<&str>,
         password: Option<&str>,
         connect_timeout: Option<Duration>,
         reconnect_interval: Option<ReconnectInterval>,
-        dispatcher_internal_queue_size: usize,
+        internal_simultaneous_requests_threshold: usize,
     ) -> Result<(impl Future<Output = ()>, DispatcherSender), Error>
     where
         A: ToSocketAddrs + Display + Clone + Send + Sync + 'static,
@@ -70,13 +70,20 @@ impl Dispatcher {
             let password = password.clone();
             let connect_timeout = connect_timeout;
             Box::pin(async move {
-                Connection::new(addr, user.as_deref(), password.as_deref(), connect_timeout).await
+                Connection::new(
+                    addr,
+                    user.as_deref(),
+                    password.as_deref(),
+                    connect_timeout,
+                    internal_simultaneous_requests_threshold,
+                )
+                .await
             }) as Pin<Box<ConnectDynFuture>>
         });
 
         let conn = conn_factory().await?;
 
-        let (tx, rx) = mpsc::channel(dispatcher_internal_queue_size);
+        let (tx, rx) = mpsc::channel(internal_simultaneous_requests_threshold);
 
         Ok((
             Self {

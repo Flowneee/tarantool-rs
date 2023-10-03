@@ -1,11 +1,10 @@
-use std::{collections::HashMap, fmt::Display, future::ready, sync::Arc, time::Duration};
+use std::{collections::HashMap, fmt::Display, time::Duration};
 
 use futures::{
-    future::{pending, Fuse, FusedFuture},
-    lock::BiLock,
-    FutureExt, SinkExt, StreamExt, TryFutureExt, TryStreamExt,
+    future::{Fuse, FusedFuture},
+    FutureExt, SinkExt, StreamExt, TryStreamExt,
 };
-use parking_lot::Mutex;
+
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{
@@ -14,27 +13,23 @@ use tokio::{
     },
     pin,
     sync::{
-        mpsc::{self, Permit},
+        mpsc::{self},
         oneshot,
     },
     task::JoinHandle,
 };
 use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::{
-    codec::{FramedRead, FramedWrite},
-    either::Either,
-};
+use tokio_util::codec::{FramedRead, FramedWrite};
 use tracing::{debug, trace, warn};
 
 use super::dispatcher::{DispatcherRequest, DispatcherResponse};
 use crate::{
     codec::{
-        request::{self, Auth, EncodedRequest},
+        request::{Auth, EncodedRequest},
         response::{Response, ResponseBody},
         ClientCodec, Greeting,
     },
-    errors::{CodecDecodeError, CodecEncodeError, Error},
-    transport::connection,
+    errors::{CodecEncodeError, ConnectionError, Error},
 };
 
 struct ConnectionData {
@@ -111,33 +106,47 @@ impl ConnectionData {
 
     /// Send error to all in-flight requests and drop them.
     #[inline]
-    fn send_error_to_all_in_flights(&mut self, err: CodecDecodeError) {
+    fn send_error_to_all_in_flights(&mut self, err: ConnectionError) {
         for (_, tx) in self.in_flights.drain() {
             let _ = tx.send(Err(err.clone().into()));
         }
     }
 }
 
+// TODO: cancel
 async fn writer_task(
     mut rx: mpsc::Receiver<EncodedRequest>,
     mut stream: FramedWrite<OwnedWriteHalf, ClientCodec>,
-) -> Result<(), (u32, CodecEncodeError)> {
+) -> Result<(), (u32, CodecEncodeError, Vec<EncodedRequest>)> {
+    let mut result = Ok(());
     while let Some(x) = rx.recv().await {
         let sync = x.sync;
-        stream.send(x).await.map_err(|err| (sync, err))?;
+        if let Err(err) = stream.send(x).await {
+            // Close internal queue and extract all remaining requests
+            rx.close();
+            let mut remaining_requests = Vec::new();
+            while let Ok(next) = rx.try_recv() {
+                remaining_requests.push(next);
+            }
+
+            result = Err((sync, err, remaining_requests));
+            break;
+        }
     }
 
     if let Err(err) = stream.into_inner().shutdown().await {
         warn!("Failed to shutdown TCP stream cleanly: {err}");
     }
 
-    Ok(())
+    result
 }
+
+type WriterTaskJoinHandle = JoinHandle<Result<(), (u32, CodecEncodeError, Vec<EncodedRequest>)>>;
 
 pub(crate) struct Connection {
     read_stream: FramedRead<OwnedReadHalf, ClientCodec>,
     writer_tx: mpsc::Sender<EncodedRequest>,
-    writer_task_handle: JoinHandle<Result<(), (u32, CodecEncodeError)>>,
+    writer_task_handle: WriterTaskJoinHandle,
     data: ConnectionData,
 }
 
@@ -146,6 +155,7 @@ impl Connection {
         addr: A,
         user: Option<&str>,
         password: Option<&str>,
+        internal_simultaneous_requests_threshold: usize,
     ) -> Result<Self, Error>
     where
         A: ToSocketAddrs + Display,
@@ -178,7 +188,10 @@ impl Connection {
             .await?;
         }
 
-        let (writer_tx, writer_rx) = mpsc::channel(1000);
+        // TODO: review size of this queue
+        // Make this queue slightly larger than queue between Client and Dispatcher
+        let (writer_tx, writer_rx) =
+            mpsc::channel(internal_simultaneous_requests_threshold / 100 * 105);
         let writer_task_handle = tokio::spawn(writer_task(writer_rx, write_stream));
 
         let this = Self {
@@ -196,16 +209,33 @@ impl Connection {
         user: Option<&str>,
         password: Option<&str>,
         timeout: Option<Duration>,
+        internal_simultaneous_requests_threshold: usize,
     ) -> Result<Self, Error>
     where
         A: ToSocketAddrs + Display,
     {
         match timeout {
-            Some(dur) => tokio::time::timeout(dur, Self::new_inner(addr, user, password))
+            Some(dur) => tokio::time::timeout(
+                dur,
+                Self::new_inner(
+                    addr,
+                    user,
+                    password,
+                    internal_simultaneous_requests_threshold,
+                ),
+            )
+            .await
+            .map_err(|_| Error::ConnectTimeout)
+            .and_then(|x| x),
+            None => {
+                Self::new_inner(
+                    addr,
+                    user,
+                    password,
+                    internal_simultaneous_requests_threshold,
+                )
                 .await
-                .map_err(|_| Error::ConnectTimeout)
-                .and_then(|x| x),
-            None => Self::new_inner(addr, user, password).await,
+            }
         }
     }
 
@@ -231,29 +261,13 @@ impl Connection {
     }
 
     #[inline]
-    fn handle_send_result(
-        connection_data: &mut ConnectionData,
-        sync: u32,
-        result: Result<(), CodecEncodeError>,
-    ) -> Result<(), tokio::io::Error> {
-        match result {
-            Ok(x) => Ok(x),
-            Err(CodecEncodeError::Encode(err)) => {
-                connection_data.respond_to_client(sync, Err(err.into()));
-                Ok(())
-            }
-            Err(CodecEncodeError::Io(err)) => Err(err),
-        }
-    }
-
-    #[inline]
     async fn get_next_stream_value(
         read_stream: &mut FramedRead<OwnedReadHalf, ClientCodec>,
-    ) -> Result<Response, CodecDecodeError> {
+    ) -> Result<Response, ConnectionError> {
         match read_stream.try_next().await {
             Ok(Some(x)) => Ok(x),
-            Ok(None) => Err(CodecDecodeError::Closed),
-            Err(e) => Err(e),
+            Ok(None) => Err(ConnectionError::ConnectionClosed),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -267,7 +281,7 @@ impl Connection {
         connection_data.respond_to_client(response.sync, Ok(response));
     }
 
-    /// Run connection.
+    /// Run connection until it breaks of `rx` is closed.
     ///
     /// `Ok` means `rx` was closed and connection should not be restarted.
     /// `Err` means connection was dropped due to some error.
@@ -282,9 +296,6 @@ impl Connection {
             mut data,
         } = self;
 
-        let client_rx_filtered = client_rx.filter(|(_, tx)| ready(!tx.is_closed()));
-        pin!(client_rx_filtered);
-
         let send_to_writer_future = Fuse::terminated();
         pin!(send_to_writer_future);
 
@@ -297,11 +308,13 @@ impl Connection {
                         Err(err) => break err,
                     }
                 }
+
                 // Read value from internal queue if nothing being sent to writer
-                next = client_rx_filtered.next(), if send_to_writer_future.is_terminated() => {
+                next = client_rx.next(), if send_to_writer_future.is_terminated() => {
                     if let Some((mut request, tx)) = next {
-                        // If failed to prepare request - just go to next
-                        if data
+                        // If failed to prepare request or client already
+                        // dropped oneshot - just go to next
+                        if tx.is_closed() || data
                             .try_prepare_request(&mut request, tx)
                             .is_err()
                         {
@@ -315,23 +328,30 @@ impl Connection {
                         return Ok(());
                     }
                 }
-                send_res = &mut send_to_writer_future, if !send_to_writer_future.is_terminated() => {
-                    // TODO: handle send_res
-                    // if let Err(err) = Connection::handle_send_result(&mut data, sync, Ok(())) {
-                    //     break err.into();
-                    // }
+
+                // Await sending request to writer.
+                // NOTE: For some reason checking Fuse for termination makes code _slightly_ faster
+                _send_res = &mut send_to_writer_future, if !send_to_writer_future.is_terminated() => {
+                    // TODO: somehow return EncodedRequest from Err variant, so it can be retried
+
+                    // Do nothing, since on success there is nothing to do,
+                    // and on error we can only response to client with ConnectionClosed,
+                    // which will happen anyway in next branch on next (or so) iteration.
                 }
+
+                // Wait for writer task to finish
                 writer_result = &mut writer_task_handle => {
                     match writer_result {
-                        Err(_) => {
-                            todo!("handle result")
+                        Err(err) => {
+                            break err.into();
                         },
-                        Ok(Err((sync, err))) => {
-                            todo!("handle result")
+                        // TODO: actually do something with remaining requests
+                        Ok(Err((sync, err, _remaining_requests))) => {
+                            data.respond_to_client(sync, Err(err.into()));
                         },
                         _ => {}
                     }
-                    break CodecDecodeError::Closed
+                    break ConnectionError::ConnectionClosed
                 }
             }
         };

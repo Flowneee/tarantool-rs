@@ -12,7 +12,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let container = TarantoolTestContainer::default();
 
     let conn = Connection::builder()
-        .dispatcher_internal_queue_size(1100)
+        .internal_simultaneous_requests_threshold(1000)
         .build(format!("127.0.0.1:{}", container.connect_port()))
         .await?;
     // let conn = rusty_tarantool::tarantool::ClientConfig::new(
