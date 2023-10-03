@@ -12,16 +12,16 @@ async fn main() -> Result<(), anyhow::Error> {
     let container = TarantoolTestContainer::default();
 
     let conn = Connection::builder()
-        .dispatcher_internal_queue_size(15000)
+        .dispatcher_internal_queue_size(1100)
         .build(format!("127.0.0.1:{}", container.connect_port()))
         .await?;
-    let conn = rusty_tarantool::tarantool::ClientConfig::new(
-        format!("127.0.0.1:{}", container.connect_port()),
-        "guest",
-        "",
-    )
-    .build();
-    conn.ping().await?;
+    // let conn = rusty_tarantool::tarantool::ClientConfig::new(
+    //     format!("127.0.0.1:{}", container.connect_port()),
+    //     "guest",
+    //     "",
+    // )
+    // .build();
+    // conn.ping().await?;
 
     let mut counter = 0u64;
     let mut last_measured_counter = 0;
@@ -30,7 +30,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let interval_secs = 2;
     let interval = Duration::from_secs(interval_secs);
 
-    let mut stream = repeat_with(|| conn.ping()).buffer_unordered(10000);
+    let mut stream = repeat_with(|| conn.ping()).buffer_unordered(1000);
     while let _ = stream.next().await {
         counter += 1;
         if last_measured_ts.elapsed() > interval {

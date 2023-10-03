@@ -9,7 +9,10 @@ use tokio::{
         TcpStream, ToSocketAddrs,
     },
     pin,
-    sync::{mpsc, oneshot},
+    sync::{
+        mpsc::{self, Permit},
+        oneshot,
+    },
     task::JoinHandle,
 };
 use tokio_stream::wrappers::ReceiverStream;
@@ -218,7 +221,7 @@ impl Connection {
             .await?;
         }
 
-        let (writer_tx, writer_rx) = mpsc::channel(500);
+        let (writer_tx, writer_rx) = mpsc::channel(1100);
         let writer_task_handle = tokio::spawn(writer_task(writer_rx, write_stream));
 
         let this = Self {
@@ -325,7 +328,17 @@ impl Connection {
         let client_rx_filtered = client_rx.filter(|(_, tx)| ready(!tx.is_closed()));
         pin!(client_rx_filtered);
 
+        let mut next_request_to_write = None;
+        let mut permit: Option<Permit<_>> = None;
+
         let err = loop {
+            if next_request_to_write.is_some() && permit.is_some() {
+                permit
+                    .take()
+                    .unwrap()
+                    .send(next_request_to_write.take().unwrap());
+            }
+
             tokio::select! {
                 // Read value from TCP stream
                 next = Connection::get_next_stream_value(&mut read_stream) => {
@@ -334,8 +347,19 @@ impl Connection {
                         Err(err) => break err,
                     }
                 }
+                // Get permit to send request to writer
+                permit_res = writer_tx.reserve(), if permit.is_none() => {
+                    match permit_res {
+                        Ok(x) => {
+                            permit = Some(x);
+                        },
+                        Err(err) => {
+                            todo!("throw error");
+                        }
+                    }
+                }
                 // Read value from internal queue
-                next = client_rx_filtered.next() => {
+                next = client_rx_filtered.next(), if next_request_to_write.is_none() => {
                     if let Some((mut request, tx)) = next {
                         // If failed to prepare request - just go to next
                         if data
@@ -346,11 +370,12 @@ impl Connection {
                         }
 
                         let sync = request.sync;
-                        let _send_res = writer_tx.send(request).await;
-                        // FIXME: Ok(())
-                        if let Err(err) = Connection::handle_send_result(&mut data, sync, Ok(())) {
-                            break err.into();
-                        }
+                        next_request_to_write = Some(request);
+                        // let _send_res = writer_tx.send(request).await;
+                        // // FIXME: Ok(())
+                        // if let Err(err) = Connection::handle_send_result(&mut data, sync, Ok(())) {
+                        //     break err.into();
+                        // }
                     } else {
                         // TODO: actually don't quit until all in-flights processed
                         debug!("All senders dropped");
