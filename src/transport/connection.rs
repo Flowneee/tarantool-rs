@@ -16,7 +16,10 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::codec::{FramedRead, FramedWrite};
+use tokio_util::{
+    codec::{FramedRead, FramedWrite},
+    sync::CancellationToken,
+};
 use tracing::{debug, error, trace, warn};
 
 use super::dispatcher::{DispatcherRequest, DispatcherResponse, DispatcherResponseSender};
@@ -27,6 +30,7 @@ use crate::{
         ClientCodec, Greeting,
     },
     errors::{CodecEncodeError, ConnectionError, Error},
+    utils::CancellableFuture,
 };
 
 struct ConnectionData {
@@ -119,23 +123,35 @@ impl ConnectionData {
     }
 }
 
-// TODO: cancel
+// NOTE: here is weird logic, where task can be cancelld using token and when
+// rx closed. Token is necessary to close task when it currently sending to socket.
 async fn writer_task(
     mut rx: mpsc::Receiver<EncodedRequest>,
     mut stream: FramedWrite<OwnedWriteHalf, ClientCodec>,
+    cancellation_token: CancellationToken,
 ) -> (Result<(), (u32, CodecEncodeError)>, Vec<EncodedRequest>) {
     let mut result = Ok(());
 
     while let Some(x) = rx.recv().await {
         let sync = x.sync;
-        if let Err(err) = stream.send(x).await {
-            result = Err((sync, err));
-            break;
+        let fut = CancellableFuture::new(stream.send(x), &cancellation_token);
+        match fut.await {
+            Ok(Ok(_)) => {}
+            Ok(Err(err)) => {
+                result = Err((sync, err));
+                break;
+            }
+            Err(_) => {
+                // Do not set error since task was cancelled externally.
+                // Should respond with ConnectionClosed in main task
+                break;
+            }
         }
     }
 
     // Close internal queue and extract all remaining requests
     rx.close();
+    cancellation_token.cancel();
     let mut remaining_requests = Vec::new();
     while let Ok(next) = rx.try_recv() {
         remaining_requests.push(next);
@@ -155,6 +171,7 @@ pub(crate) struct Connection {
     read_stream: FramedRead<OwnedReadHalf, ClientCodec>,
     writer_tx: mpsc::Sender<EncodedRequest>,
     writer_task_handle: WriterTaskJoinHandle,
+    writer_task_cancellation_token: CancellationToken,
     data: ConnectionData,
 }
 
@@ -200,12 +217,18 @@ impl Connection {
         // Make this queue slightly larger than queue between Client and Dispatcher
         let (writer_tx, writer_rx) =
             mpsc::channel(internal_simultaneous_requests_threshold / 100 * 105);
-        let writer_task_handle = tokio::spawn(writer_task(writer_rx, write_stream));
+        let writer_task_cancellation_token = CancellationToken::new();
+        let writer_task_handle = tokio::spawn(writer_task(
+            writer_rx,
+            write_stream,
+            writer_task_cancellation_token.clone(),
+        ));
 
         let this = Self {
             read_stream,
             writer_tx,
             writer_task_handle,
+            writer_task_cancellation_token,
             data: conn_data,
         };
 
@@ -301,6 +324,7 @@ impl Connection {
             mut read_stream,
             writer_tx,
             writer_task_handle,
+            writer_task_cancellation_token,
             mut data,
         } = self;
 
@@ -355,6 +379,7 @@ impl Connection {
                 }
             }
         };
+        writer_task_cancellation_token.cancel();
 
         // Wait for writer task to finish
         match writer_task_handle.await {
