@@ -1,7 +1,6 @@
 use std::{fmt::Display, future::Future, pin::Pin, time::Duration};
 
 use backoff::{backoff::Backoff, ExponentialBackoff, ExponentialBackoffBuilder};
-use futures::TryFutureExt;
 use tokio::{
     net::ToSocketAddrs,
     sync::{mpsc, oneshot},
@@ -16,25 +15,79 @@ use crate::{
 };
 
 // Arc here is necessary to send same error to all waiting in-flights
-pub(crate) type DispatcherResponse = Result<Response, Error>;
-pub(crate) type DispatcherRequest = (EncodedRequest, oneshot::Sender<DispatcherResponse>);
+pub(crate) type DispatcherRequest = (EncodedRequest, DispatcherResponseSender);
+
+pub(crate) enum DispatcherResponse {
+    Finished(Result<Response, Error>),
+    NeedsResend(EncodedRequest),
+}
+
+impl From<Result<Response, Error>> for DispatcherResponse {
+    #[inline]
+    fn from(value: Result<Response, Error>) -> Self {
+        Self::Finished(value)
+    }
+}
+
+impl From<Error> for DispatcherResponse {
+    #[inline]
+    fn from(value: Error) -> Self {
+        Self::Finished(Err(value))
+    }
+}
+
+impl From<EncodedRequest> for DispatcherResponse {
+    #[inline]
+    fn from(value: EncodedRequest) -> Self {
+        Self::NeedsResend(value)
+    }
+}
+
+#[repr(transparent)]
+pub(crate) struct DispatcherResponseSender(oneshot::Sender<DispatcherResponse>);
+
+impl DispatcherResponseSender {
+    #[inline]
+    pub(crate) fn send(
+        self,
+        value: impl Into<DispatcherResponse>,
+    ) -> Result<(), DispatcherResponse> {
+        self.0.send(value.into())
+    }
+
+    #[inline]
+    pub(crate) fn is_closed(&self) -> bool {
+        self.0.is_closed()
+    }
+}
 
 pub(crate) struct DispatcherSender {
     tx: mpsc::Sender<DispatcherRequest>,
 }
 
 impl DispatcherSender {
-    pub(crate) async fn send(&self, request: EncodedRequest) -> DispatcherResponse {
-        let (tx, rx) = oneshot::channel();
-        self.tx
-            .send((request, tx))
-            .map_err(|_| Error::ConnectionClosed)
-            .and_then(|_| async {
-                rx.await
-                    .map_err(|_| Error::ConnectionClosed)
-                    .and_then(|x| x)
-            })
-            .await
+    pub(crate) async fn send(&self, request: EncodedRequest) -> Result<Response, Error> {
+        let mut request = Some(request);
+        loop {
+            let (tx, rx) = oneshot::channel();
+            let tx = DispatcherResponseSender(tx);
+
+            // SAFETY: initial value is put in Option immediately.
+            // On next iterations value is put in Option right before `continue` expression.
+            if let Err(send_err) = self.tx.send((request.take().unwrap(), tx)).await {
+                request = Some(send_err.0 .0);
+                continue;
+            }
+
+            match rx.await {
+                Ok(DispatcherResponse::Finished(x)) => return x,
+                Ok(DispatcherResponse::NeedsResend(x)) => {
+                    request = Some(x);
+                    continue;
+                }
+                Err(_) => return Err(Error::ConnectionClosed),
+            }
+        }
     }
 }
 

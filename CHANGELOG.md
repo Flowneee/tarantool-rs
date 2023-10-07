@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased] - XXXX-XX-XX
+### Changed
+ - When connection closes, requests that was not sent but already stuck in internal channels, is going to be sent after new connection is created.
+
+
 ## [0.0.10] - 2023-10-04
 ### Added
  - `internal_simultaneous_requests_threshold` parameter to builder, which allow to customize maximum number of simultaneously created requests, which connection can effectively handle.

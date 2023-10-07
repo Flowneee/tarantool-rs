@@ -6,23 +6,20 @@ use futures::{
 };
 
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::AsyncReadExt,
     net::{
         tcp::{OwnedReadHalf, OwnedWriteHalf},
         TcpStream, ToSocketAddrs,
     },
     pin,
-    sync::{
-        mpsc::{self},
-        oneshot,
-    },
+    sync::mpsc,
     task::JoinHandle,
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::codec::{FramedRead, FramedWrite};
-use tracing::{debug, trace, warn};
+use tracing::{debug, error, trace, warn};
 
-use super::dispatcher::{DispatcherRequest, DispatcherResponse};
+use super::dispatcher::{DispatcherRequest, DispatcherResponse, DispatcherResponseSender};
 use crate::{
     codec::{
         request::{Auth, EncodedRequest},
@@ -33,7 +30,7 @@ use crate::{
 };
 
 struct ConnectionData {
-    in_flights: HashMap<u32, oneshot::Sender<DispatcherResponse>>,
+    in_flights: HashMap<u32, DispatcherResponseSender>,
     next_sync: u32,
 }
 
@@ -64,7 +61,7 @@ impl ConnectionData {
     fn try_prepare_request(
         &mut self,
         request: &mut EncodedRequest,
-        tx: oneshot::Sender<DispatcherResponse>,
+        tx: DispatcherResponseSender,
     ) -> Result<(), ()> {
         let sync = self.next_sync();
         *request.sync_mut() = sync;
@@ -81,7 +78,8 @@ impl ConnectionData {
                 .in_flights
                 .insert(request.sync, old)
                 .expect("Shouldn't panic, value was just inserted");
-            if new.send(Err(Error::DuplicatedSync(request.sync))).is_err() {
+            // TODO: probably could respond with NeedsResend
+            if new.send(Error::DuplicatedSync(request.sync)).is_err() {
                 warn!(
                     "Failed to pass error to sync {}, receiver dropped",
                     request.sync
@@ -94,9 +92,9 @@ impl ConnectionData {
 
     /// Send result of processing request (by sync) to client.
     #[inline]
-    fn respond_to_client(&mut self, sync: u32, result: Result<Response, Error>) {
+    fn respond_to_client(&mut self, sync: u32, response: impl Into<DispatcherResponse>) {
         if let Some(tx) = self.in_flights.remove(&sync) {
-            if tx.send(result).is_err() {
+            if tx.send(response).is_err() {
                 warn!("Failed to pass response sync {}, receiver dropped", sync);
             }
         } else {
@@ -108,7 +106,15 @@ impl ConnectionData {
     #[inline]
     fn send_error_to_all_in_flights(&mut self, err: ConnectionError) {
         for (_, tx) in self.in_flights.drain() {
-            let _ = tx.send(Err(err.clone().into()));
+            let _ = tx.send(Error::from(err.clone()));
+        }
+    }
+
+    /// Return requests to be resent
+    #[inline]
+    fn return_requests_to_be_resent(&mut self, requests: Vec<EncodedRequest>) {
+        for x in requests {
+            self.respond_to_client(x.sync, x)
         }
     }
 }
@@ -117,31 +123,33 @@ impl ConnectionData {
 async fn writer_task(
     mut rx: mpsc::Receiver<EncodedRequest>,
     mut stream: FramedWrite<OwnedWriteHalf, ClientCodec>,
-) -> Result<(), (u32, CodecEncodeError, Vec<EncodedRequest>)> {
+) -> (Result<(), (u32, CodecEncodeError)>, Vec<EncodedRequest>) {
     let mut result = Ok(());
+
     while let Some(x) = rx.recv().await {
         let sync = x.sync;
         if let Err(err) = stream.send(x).await {
-            // Close internal queue and extract all remaining requests
-            rx.close();
-            let mut remaining_requests = Vec::new();
-            while let Ok(next) = rx.try_recv() {
-                remaining_requests.push(next);
-            }
-
-            result = Err((sync, err, remaining_requests));
+            result = Err((sync, err));
             break;
         }
     }
 
-    if let Err(err) = stream.into_inner().shutdown().await {
-        warn!("Failed to shutdown TCP stream cleanly: {err}");
+    // Close internal queue and extract all remaining requests
+    rx.close();
+    let mut remaining_requests = Vec::new();
+    while let Ok(next) = rx.try_recv() {
+        remaining_requests.push(next);
     }
 
-    result
+    // TODO: reenable or pass strema back into main task
+    // if let Err(err) = stream.into_inner().shutdown().await {
+    //     warn!("Failed to shutdown TCP stream cleanly: {err}");
+    // }
+
+    (result, remaining_requests)
 }
 
-type WriterTaskJoinHandle = JoinHandle<Result<(), (u32, CodecEncodeError, Vec<EncodedRequest>)>>;
+type WriterTaskJoinHandle = JoinHandle<(Result<(), (u32, CodecEncodeError)>, Vec<EncodedRequest>)>;
 
 pub(crate) struct Connection {
     read_stream: FramedRead<OwnedReadHalf, ClientCodec>,
@@ -292,20 +300,22 @@ impl Connection {
         let Self {
             mut read_stream,
             writer_tx,
-            mut writer_task_handle,
+            writer_task_handle,
             mut data,
         } = self;
+
+        let mut not_sent_requests = Vec::new();
 
         let send_to_writer_future = Fuse::terminated();
         pin!(send_to_writer_future);
 
-        let err = loop {
+        let result = loop {
             tokio::select! {
                 // Read value from TCP stream
                 next = Connection::get_next_stream_value(&mut read_stream) => {
                     match next {
                         Ok(x) => Connection::handle_response(&mut data, x),
-                        Err(err) => break err,
+                        Err(err) => break Err(err),
                     }
                 }
 
@@ -325,38 +335,52 @@ impl Connection {
                     } else {
                         // TODO: actually don't quit until all in-flights processed
                         debug!("All senders dropped");
-                        return Ok(());
+                        break Ok(());
                     }
                 }
 
                 // Await sending request to writer.
                 // NOTE: For some reason checking Fuse for termination makes code _slightly_ faster
-                _send_res = &mut send_to_writer_future, if !send_to_writer_future.is_terminated() => {
+                send_res = &mut send_to_writer_future, if !send_to_writer_future.is_terminated() => {
+                    // Error means writer rx is closed and connection should be terminated.
+                    if let Err(err) = send_res {
+                        not_sent_requests.push(err.0);
+                        break Err(ConnectionError::ConnectionClosed)
+                    }
                     // TODO: somehow return EncodedRequest from Err variant, so it can be retried
 
                     // Do nothing, since on success there is nothing to do,
                     // and on error we can only response to client with ConnectionClosed,
                     // which will happen anyway in next branch on next (or so) iteration.
                 }
-
-                // Wait for writer task to finish
-                writer_result = &mut writer_task_handle => {
-                    match writer_result {
-                        Err(err) => {
-                            break err.into();
-                        },
-                        // TODO: actually do something with remaining requests
-                        Ok(Err((sync, err, _remaining_requests))) => {
-                            data.respond_to_client(sync, Err(err.into()));
-                        },
-                        _ => {}
-                    }
-                    break ConnectionError::ConnectionClosed
-                }
             }
         };
 
-        data.send_error_to_all_in_flights(err);
-        Err(())
+        // Wait for writer task to finish
+        match writer_task_handle.await {
+            Err(err) => {
+                error!("Failed to await writer task's handle: {err}");
+            }
+            Ok((result, not_sent_requests_from_writer)) => {
+                not_sent_requests.extend(not_sent_requests_from_writer);
+
+                if let Err((sync, err)) = result {
+                    data.respond_to_client(sync, Err(err.into()))
+                }
+            }
+        }
+
+        // Respond to all in flights with error
+        data.send_error_to_all_in_flights(
+            result
+                .clone()
+                .err()
+                .unwrap_or(ConnectionError::ConnectionClosed),
+        );
+
+        // Schedule all not sent requests to resend
+        data.return_requests_to_be_resent(not_sent_requests);
+
+        result.map_err(drop)
     }
 }
