@@ -152,7 +152,7 @@ impl Connection {
         // If statement not found, try to lock update lock mutex.
         // If successful, proceed with preparing SQL statement,
         // otherwise return None.
-        let update_lock = self.inner.sql_statement_cache_update_lock.try_lock();
+        let update_lock = self.inner.sql_statement_cache_update_lock.try_lock()?;
         let stmt_id = {
             let stmt_id = match self.prepare_sql(statement).await {
                 Ok(x) => {

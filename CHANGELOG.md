@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [Unreleased] - XXXX-XX-XX
+### Fixed
+ - Correctly skipping statement preparetion if there is ongoing preparation.
+
 ### Changed
  - When connection closes, requests that was not sent but already stuck in internal channels, is going to be sent after new connection is created.
 
