@@ -176,10 +176,10 @@ pub(crate) struct Connection {
 }
 
 impl Connection {
-    async fn new_inner<A>(
+    pub(super) async fn new<A>(
         addr: A,
-        user: Option<&str>,
-        password: Option<&str>,
+        user: Option<String>,
+        password: Option<String>,
         internal_simultaneous_requests_threshold: usize,
     ) -> Result<Self, Error>
     where
@@ -206,8 +206,8 @@ impl Connection {
                 &mut read_stream,
                 &mut write_stream,
                 conn_data.next_sync(),
-                user,
-                password,
+                &user,
+                password.as_deref(),
                 &greeting.salt,
             )
             .await?;
@@ -233,41 +233,6 @@ impl Connection {
         };
 
         Ok(this)
-    }
-
-    pub(super) async fn new<A>(
-        addr: A,
-        user: Option<&str>,
-        password: Option<&str>,
-        timeout: Option<Duration>,
-        internal_simultaneous_requests_threshold: usize,
-    ) -> Result<Self, Error>
-    where
-        A: ToSocketAddrs + Display,
-    {
-        match timeout {
-            Some(dur) => tokio::time::timeout(
-                dur,
-                Self::new_inner(
-                    addr,
-                    user,
-                    password,
-                    internal_simultaneous_requests_threshold,
-                ),
-            )
-            .await
-            .map_err(|_| Error::ConnectTimeout)
-            .and_then(|x| x),
-            None => {
-                Self::new_inner(
-                    addr,
-                    user,
-                    password,
-                    internal_simultaneous_requests_threshold,
-                )
-                .await
-            }
-        }
     }
 
     async fn auth(

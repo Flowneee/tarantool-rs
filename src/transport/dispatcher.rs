@@ -1,6 +1,7 @@
 use std::{fmt::Display, future::Future, pin::Pin, time::Duration};
 
 use backoff::{backoff::Backoff, ExponentialBackoff, ExponentialBackoffBuilder};
+use futures::{FutureExt, TryFutureExt};
 use tokio::{
     net::ToSocketAddrs,
     sync::{mpsc, oneshot},
@@ -96,18 +97,18 @@ type ConnectDynFuture = dyn Future<Output = Result<Connection, Error>> + Send;
 /// Dispatching messages from client to connection.
 ///
 /// Currently no-op, in future it should handle reconnects, schema reloading, pooling.
-pub(crate) struct Dispatcher {
+pub(crate) struct ConnectionWatcher {
     rx: ReceiverStream<DispatcherRequest>,
     conn: Option<Connection>,
     conn_factory: Box<dyn Fn() -> Pin<Box<ConnectDynFuture>> + Send + Sync>,
     reconnect_interval: Option<ReconnectInterval>,
 }
 
-impl Dispatcher {
+impl ConnectionWatcher {
     pub(crate) async fn prepare<A>(
         addr: A,
-        user: Option<&str>,
-        password: Option<&str>,
+        user: Option<String>,
+        password: Option<String>,
         connect_timeout: Option<Duration>,
         reconnect_interval: Option<ReconnectInterval>,
         internal_simultaneous_requests_threshold: usize,
@@ -115,23 +116,20 @@ impl Dispatcher {
     where
         A: ToSocketAddrs + Display + Clone + Send + Sync + 'static,
     {
-        let user: Option<String> = user.map(Into::into);
-        let password: Option<String> = password.map(Into::into);
         let conn_factory = Box::new(move || {
-            let addr = addr.clone();
-            let user = user.clone();
-            let password = password.clone();
-            let connect_timeout = connect_timeout;
-            Box::pin(async move {
-                Connection::new(
-                    addr,
-                    user.as_deref(),
-                    password.as_deref(),
-                    connect_timeout,
-                    internal_simultaneous_requests_threshold,
+            Box::pin(
+                tokio::time::timeout(
+                    connect_timeout.unwrap_or(Duration::MAX),
+                    Connection::new(
+                        addr.clone(),
+                        user.clone(),
+                        password.clone(),
+                        internal_simultaneous_requests_threshold,
+                    ),
                 )
-                .await
-            }) as Pin<Box<ConnectDynFuture>>
+                .map_err(|_| Error::ConnectTimeout)
+                .and_then(|x| async { x }),
+            ) as Pin<Box<ConnectDynFuture>>
         });
 
         let conn = conn_factory().await?;
@@ -172,7 +170,7 @@ impl Dispatcher {
     }
 
     pub(crate) async fn run(mut self) {
-        debug!("Starting dispatcher");
+        debug!("Starting connection watcher");
         loop {
             if let Some(conn) = self.conn.take() {
                 if conn.run(&mut self.rx).await.is_ok() {

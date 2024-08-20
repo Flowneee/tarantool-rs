@@ -7,7 +7,7 @@ use crate::{
     client::Connection,
     codec::{consts::TransactionIsolationLevel, request::Id},
     errors::Error,
-    transport::Dispatcher,
+    transport::ConnectionWatcher,
 };
 
 const DEFAULT_DISPATCHER_INTERNAL_QUEUE_SIZE: usize = 500;
@@ -92,10 +92,10 @@ impl ConnectionBuilder {
     where
         A: ToSocketAddrs + Display + Clone + Send + Sync + 'static,
     {
-        let (dispatcher_fut, disaptcher_sender) = Dispatcher::prepare(
+        let (dispatcher_fut, disaptcher_sender) = ConnectionWatcher::prepare(
             addr,
-            self.user.as_deref(),
-            self.password.as_deref(),
+            self.user.clone(),
+            self.password.clone(),
             self.timeout,
             self.reconnect_interval.clone(),
             self.internal_simultaneous_requests_threshold,
@@ -104,6 +104,7 @@ impl ConnectionBuilder {
 
         // TODO: support setting custom executor
         tokio::spawn(dispatcher_fut);
+
         let conn = Connection::new(
             disaptcher_sender,
             self.timeout,
