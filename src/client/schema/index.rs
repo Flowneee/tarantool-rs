@@ -1,12 +1,12 @@
 use std::{borrow::Borrow, fmt, sync::Arc};
 
 use rmpv::Value;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 
-use super::{SpaceMetadata, SystemSpacesId, PRIMARY_INDEX_ID};
+use super::{PRIMARY_INDEX_ID, SpaceMetadata, SystemSpacesId};
 use crate::{
-    client::ExecutorExt, tuple::Tuple, utils::UniqueIdName, DmoResponse, Executor, IteratorType,
-    Result, Transaction,
+    DmoResponse, Executor, IteratorType, Result, Transaction, client::ExecutorExt, tuple::Tuple,
+    utils::UniqueIdName,
 };
 
 /// Index metadata from [system view](https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_space/system_views/).
@@ -31,13 +31,17 @@ impl fmt::Debug for IndexMetadata {
             // TODO: uncomment when fields implemented
             // .field("_opts", &self._opts)
             // .field("_parts", &self._parts)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
 impl IndexMetadata {
     // TODO: replace space_id type from u32 to something generic
     /// Load list of indices of single space.
+    /// # Errors
+    ///
+    /// Returns an error if the request failed to reach Tarantool or
+    /// Tarantool responded with an error.
     pub async fn load_by_space_id(conn: impl ExecutorExt, space_id: u32) -> Result<Vec<Self>> {
         conn.select(
             SystemSpacesId::VIndex as u32,
@@ -51,26 +55,31 @@ impl IndexMetadata {
     }
 
     /// Returns the id space to which this index belongs.
+    #[must_use]
     pub fn space_id(&self) -> u32 {
         self.space_id
     }
 
     /// Returns the id of this index in space.
+    #[must_use]
     pub fn id(&self) -> u32 {
         self.index_id
     }
 
     /// Returns whether this index is primary or not.
+    #[must_use]
     pub fn is_primary(&self) -> bool {
         self.index_id == PRIMARY_INDEX_ID
     }
 
     /// Returns a name of this index.
+    #[must_use]
     pub fn name(&self) -> &str {
         self.name.as_ref()
     }
 
     /// Returns a type of this index.
+    #[must_use]
     pub fn type_(&self) -> &str {
         self.type_.as_ref()
     }
@@ -158,6 +167,10 @@ where
     /// Call `select` on current index.
     ///
     /// For details see [`ExecutorExt::select`].
+    /// # Errors
+    ///
+    /// Returns an error if the request failed or the result cannot be
+    /// deserialized into `T`.
     pub async fn select<T, A>(
         &self,
         limit: Option<u32>,
@@ -184,6 +197,10 @@ where
     /// Call `update` on current index.
     ///
     /// For details see [`ExecutorExt::update`].
+    /// # Errors
+    ///
+    /// Returns an error if the request failed to reach Tarantool or
+    /// Tarantool responded with an error.
     pub async fn update<K, O>(&self, keys: K, ops: O) -> Result<DmoResponse>
     where
         K: Tuple + Send,
@@ -202,6 +219,10 @@ where
     /// Call `delete` on current index.
     ///
     /// For details see [`ExecutorExt::delete`].
+    /// # Errors
+    ///
+    /// Returns an error if the request failed to reach Tarantool or
+    /// Tarantool responded with an error.
     pub async fn delete<T>(&self, keys: T) -> Result<DmoResponse>
     where
         T: Tuple + Send,
@@ -218,11 +239,19 @@ where
 
 impl OwnedIndex<Transaction> {
     /// Commit inner tranasction.
+    /// # Errors
+    ///
+    /// Returns an error if the request failed to reach Tarantool or
+    /// Tarantool responded with an error.
     pub async fn commit(self) -> Result<()> {
         self.executor.commit().await
     }
 
     /// Rollback inner tranasction.
+    /// # Errors
+    ///
+    /// Returns an error if the request failed to reach Tarantool or
+    /// Tarantool responded with an error.
     pub async fn rollback(self) -> Result<()> {
         self.executor.rollback().await
     }

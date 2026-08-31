@@ -7,7 +7,7 @@ use sha1::{Digest, Sha1};
 use super::Request;
 use crate::{
     codec::{
-        consts::{keys, RequestType},
+        consts::{RequestType, keys},
         utils::write_kv_str,
     },
     errors::EncodingError,
@@ -28,7 +28,7 @@ impl<'a> Auth<'a> {
     }
 }
 
-impl<'a> Request for Auth<'a> {
+impl Request for Auth<'_> {
     fn request_type() -> RequestType
     where
         Self: Sized,
@@ -49,7 +49,7 @@ impl<'a> Request for Auth<'a> {
 }
 
 macro_rules! sha1 {
-    ($($data:expr),+) => {
+    ($($data:expr_2021),+) => {
         {
             let mut hasher = Sha1::new();
             $( hasher.update($data); )+

@@ -5,9 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased] - XXXX-XX-XX
+## [0.0.11] - 2026-08-31
+### Security
+ - Replaced the unmaintained `backoff` crate (RUSTSEC-2025-0012) with a hand-rolled exponential backoff for reconnects, preserving the previous defaults and jitter behavior; this also removed the unmaintained transitive dependency `instant` (RUSTSEC-2024-0384).
+ - Bumped `lru` from 0.11 to 0.18.2, fixing two unsoundness advisories: RUSTSEC-2026-0002 (`IterMut` violates Stacked Borrows, fixed in 0.16.3) and RUSTSEC-2026-0253 (potential use-after-free on panic in `LruCache::pop`, fixed in 0.18.2).
+
 ### Changed
  - When connection closes, requests that was not sent but already stuck in internal channels, is going to be sent after new connection is created.
+ - Moved to Rust edition 2024 with `rust-version = "1.97"` (implying dependency resolver 3). Public API is unchanged.
+ - Test harness ported to `testcontainers` 0.28, dropping the unmaintained `rental` and the vulnerable `h2` 0.3 from the dev-dependency tree; the `compare` benchmark and its `rusty_tarantool` dev-dependency (which pulled in the vulnerable, unfixable `rustc-serialize`) were removed.
 
 
 ## [0.0.10] - 2023-10-04

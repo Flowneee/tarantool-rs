@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use crate::{
-    codec::consts::{keys, RequestType, TransactionIsolationLevel},
+    codec::consts::{RequestType, TransactionIsolationLevel, keys},
     errors::EncodingError,
 };
 

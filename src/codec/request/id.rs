@@ -1,13 +1,15 @@
 use std::io::Write;
 
 use crate::{
-    codec::consts::{keys, RequestType},
+    codec::consts::{RequestType, keys},
     errors::EncodingError,
 };
 
-use super::{Request, PROTOCOL_VERSION};
+use super::{PROTOCOL_VERSION, Request};
 
 #[derive(Clone, Debug)]
+// Mirrors the independent IPROTO_ID feature flags.
+#[allow(clippy::struct_excessive_bools)]
 pub(crate) struct Id {
     pub streams: bool,
     pub transactions: bool,
@@ -49,10 +51,10 @@ impl Request for Id {
         rmp::encode::write_pfix(&mut buf, keys::VERSION)?;
         rmp::encode::write_u8(&mut buf, self.protocol_version)?;
         rmp::encode::write_pfix(&mut buf, keys::FEATURES)?;
-        let arr_len = if self.streams { 1 } else { 0 }
-            + if self.transactions { 1 } else { 0 }
-            + if self.error_extension { 1 } else { 0 }
-            + if self.watchers { 1 } else { 0 };
+        let arr_len = u32::from(self.streams)
+            + u32::from(self.transactions)
+            + u32::from(self.error_extension)
+            + u32::from(self.watchers);
         rmp::encode::write_array_len(&mut buf, arr_len)?;
         if self.streams {
             rmp::encode::write_u8(&mut buf, Self::STREAMS)?;

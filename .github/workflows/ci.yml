@@ -6,70 +6,40 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check:
-    name: Check
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --all-features
+          components: rustfmt, clippy
+      - run: cargo check --all-targets
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -Dclippy::all -Wclippy::pedantic --deny warnings --no-deps
 
   test:
     name: Test Suite
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        tarantool_image_tag: ["2.11", "2.10"]
+        tarantool_image_tag: ["3", "2.11", "2.10"]
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
       - name: Test on ${{ matrix.tarantool_image_tag }} version
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features
+        run: cargo test --all-features
         env:
           TARANTOOL_IMAGE_TAG: ${{ matrix.tarantool_image_tag }}
 
-  fmt:
-    name: Rustfmt
+  audit:
+    name: Security audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - run: rustup component add rustfmt
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - run: rustup component add clippy
-      - uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all-features -- -D warnings
+          tool: cargo-audit,cargo-deny
+      - run: cargo audit
+      - run: cargo deny check advisories

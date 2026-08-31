@@ -3,10 +3,10 @@ use std::result::Result as StdResult;
 use rmpv::Value;
 
 use crate::{
+    Executor, ExecutorExt, Result, SqlResponse, Tuple,
     codec::{consts::keys, request::Execute},
     errors::DecodingError,
     utils::{find_and_take_single_key_in_map, value_to_map},
-    Executor, ExecutorExt, Result, SqlResponse, Tuple,
 };
 
 #[derive(Debug)]
@@ -20,6 +20,10 @@ impl<E> PreparedSqlStatement<E> {
         Self { stmt_id, executor }
     }
 
+    /// # Errors
+    ///
+    /// Returns an error if `response` cannot be decoded into a prepared
+    /// statement.
     pub fn from_prepare_response(response: Value, executor: E) -> StdResult<Self, DecodingError> {
         let map = value_to_map(response).map_err(|err| err.in_other("OK prepare response body"))?;
         let value = find_and_take_single_key_in_map(keys::SQL_STMT_ID, map).ok_or_else(|| {
@@ -46,6 +50,10 @@ impl<E: Clone> Clone for PreparedSqlStatement<E> {
 
 impl<E: Executor> PreparedSqlStatement<E> {
     /// Execute prepared SQL query with parameters.
+    /// # Errors
+    ///
+    /// Returns an error if the request failed to reach Tarantool or
+    /// Tarantool responded with an error.
     pub async fn execute<T>(&self, binds: T) -> Result<SqlResponse>
     where
         T: Tuple + Send,
@@ -59,6 +67,7 @@ impl<E: Executor> PreparedSqlStatement<E> {
 }
 
 impl<E: Clone> PreparedSqlStatement<&E> {
+    #[must_use]
     pub fn with_cloned_executor(&self) -> PreparedSqlStatement<E> {
         PreparedSqlStatement {
             stmt_id: self.stmt_id,

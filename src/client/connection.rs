@@ -2,8 +2,8 @@ use std::{
     fmt,
     num::NonZeroUsize,
     sync::{
-        atomic::{AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicU32, Ordering},
     },
     time::Duration,
 };
@@ -17,6 +17,7 @@ use tokio::time::timeout;
 use tracing::{debug, trace};
 
 use crate::{
+    ExecutorExt, Result,
     builder::ConnectionBuilder,
     client::{Executor, Stream, Transaction, TransactionBuilder},
     codec::{
@@ -25,7 +26,6 @@ use crate::{
         response::ResponseBody,
     },
     transport::DispatcherSender,
-    ExecutorExt, Result,
 };
 
 /// Connection to Tarantool instance.
@@ -56,6 +56,7 @@ struct ConnectionInner {
 
 impl Connection {
     /// Create new [`ConnectionBuilder`].
+    #[must_use]
     pub fn builder() -> ConnectionBuilder {
         ConnectionBuilder::default()
     }
@@ -87,7 +88,7 @@ impl Connection {
 
     /// Synchronously send request to channel and drop response.
     #[allow(clippy::let_underscore_future)]
-    pub(crate) fn send_request_sync_and_forget(&self, body: impl Request, stream_id: Option<u32>) {
+    pub(crate) fn send_request_sync_and_forget(&self, body: &impl Request, stream_id: Option<u32>) {
         let this = self.clone();
         let req = EncodedRequest::new(body, stream_id);
         let _ = self.inner.async_rt_handle.spawn(async move {

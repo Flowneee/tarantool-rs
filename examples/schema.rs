@@ -20,19 +20,13 @@ async fn main() -> Result<(), anyhow::Error> {
     info!(
         "UPSERT: {:?}",
         space
-            .upsert(
-                (0, "Name"),
-                DmoOperation::string_splice("name", 2, 2, "!!".into()),
-            )
+            .upsert((0, "Name"), DmoOperation::string_splice("name", 2, 2, "!!"),)
             .await?
     );
     info!(
         "UPDATE: {:?}",
         space
-            .update(
-                (0,),
-                (DmoOperation::string_splice("name", 2, 2, "!!".into()),)
-            )
+            .update((0,), (DmoOperation::string_splice("name", 2, 2, "!!"),))
             .await?
     );
     info!("DELETE: {:?}", space.delete((2,)).await?);

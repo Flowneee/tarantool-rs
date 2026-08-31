@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crate::{
     codec::{
-        consts::{keys, RequestType},
+        consts::{RequestType, keys},
         utils::{write_kv_str, write_kv_tuple, write_kv_u64},
     },
     errors::EncodingError,
@@ -23,7 +23,7 @@ pub(crate) struct Execute<'a, T> {
     binds: T,
 }
 
-impl<'a, T: Tuple> Request for Execute<'a, T> {
+impl<T: Tuple> Request for Execute<'_, T> {
     fn request_type() -> RequestType
     where
         Self: Sized,

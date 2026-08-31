@@ -2,7 +2,7 @@ use std::io::Write;
 
 use rmpv::ValueRef;
 
-use crate::{errors::EncodingError, Tuple, TupleElement};
+use crate::{Tuple, TupleElement, errors::EncodingError};
 
 /// Key of index in operation.
 ///
@@ -16,13 +16,13 @@ impl<'a> From<&'a str> for DmoOperationFieldKey<'a> {
     }
 }
 
-impl<'a> From<u32> for DmoOperationFieldKey<'a> {
+impl From<u32> for DmoOperationFieldKey<'_> {
     fn from(value: u32) -> Self {
         Self(value.into())
     }
 }
 
-impl<'a> From<i32> for DmoOperationFieldKey<'a> {
+impl From<i32> for DmoOperationFieldKey<'_> {
     fn from(value: i32) -> Self {
         Self(value.into())
     }
@@ -119,7 +119,7 @@ impl<'a> DmoOperation<'a> {
     }
 }
 
-impl<'a> TupleElement for DmoOperation<'a> {
+impl TupleElement for DmoOperation<'_> {
     fn encode_into_writer<W: Write>(&self, mut buf: W) -> Result<(), EncodingError> {
         let arr_len = 2 + match self.args {
             Args::None => 0,
@@ -145,7 +145,7 @@ impl<'a> TupleElement for DmoOperation<'a> {
 }
 
 /// Implementation for allow single operation to be used as argument for `update` and `upsert`.
-impl<'a> Tuple for DmoOperation<'a> {
+impl Tuple for DmoOperation<'_> {
     fn encode_into_writer<W: Write>(&self, mut buf: W) -> Result<(), EncodingError> {
         rmp::encode::write_array_len(&mut buf, 1)?;
         TupleElement::encode_into_writer(self, &mut buf)?;

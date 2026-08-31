@@ -1,15 +1,15 @@
 use std::{collections::HashMap, fmt::Display, time::Duration};
 
 use futures::{
-    future::{Fuse, FusedFuture},
     FutureExt, SinkExt, StreamExt, TryStreamExt,
+    future::{Fuse, FusedFuture},
 };
 
 use tokio::{
     io::AsyncReadExt,
     net::{
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
         TcpStream, ToSocketAddrs,
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
     },
     pin,
     sync::mpsc,
@@ -25,9 +25,9 @@ use tracing::{debug, error, trace, warn};
 use super::dispatcher::{DispatcherRequest, DispatcherResponse, DispatcherResponseSender};
 use crate::{
     codec::{
+        ClientCodec, Greeting,
         request::{Auth, EncodedRequest},
         response::{Response, ResponseBody},
-        ClientCodec, Greeting,
     },
     errors::{CodecEncodeError, ConnectionError, Error},
     utils::CancellableFuture,
@@ -71,8 +71,7 @@ impl ConnectionData {
         *request.sync_mut() = sync;
         trace!(
             "Sending request with sync {}, stream_id {:?}",
-            request.sync,
-            request.stream_id
+            request.sync, request.stream_id
         );
         // TODO: replace with try_insert when stabilized
         // If sync already assigned to another request, return an error
@@ -97,18 +96,21 @@ impl ConnectionData {
     /// Send result of processing request (by sync) to client.
     #[inline]
     fn respond_to_client(&mut self, sync: u32, response: impl Into<DispatcherResponse>) {
-        if let Some(tx) = self.in_flights.remove(&sync) {
-            if tx.send(response).is_err() {
-                warn!("Failed to pass response sync {}, receiver dropped", sync);
+        match self.in_flights.remove(&sync) {
+            Some(tx) => {
+                if tx.send(response).is_err() {
+                    warn!("Failed to pass response sync {}, receiver dropped", sync);
+                }
             }
-        } else {
-            warn!("Unknown sync {}", sync);
+            _ => {
+                warn!("Unknown sync {}", sync);
+            }
         }
     }
 
     /// Send error to all in-flight requests and drop them.
     #[inline]
-    fn send_error_to_all_in_flights(&mut self, err: ConnectionError) {
+    fn send_error_to_all_in_flights(&mut self, err: &ConnectionError) {
         for (_, tx) in self.in_flights.drain() {
             let _ = tx.send(Error::from(err.clone()));
         }
@@ -118,7 +120,7 @@ impl ConnectionData {
     #[inline]
     fn return_requests_to_be_resent(&mut self, requests: Vec<EncodedRequest>) {
         for x in requests {
-            self.respond_to_client(x.sync, x)
+            self.respond_to_client(x.sync, x);
         }
     }
 }
@@ -136,12 +138,12 @@ async fn writer_task(
         let sync = x.sync;
         let fut = CancellableFuture::new(stream.send(x), &cancellation_token);
         match fut.await {
-            Ok(Ok(_)) => {}
+            Ok(Ok(())) => {}
             Ok(Err(err)) => {
                 result = Err((sync, err));
                 break;
             }
-            Err(_) => {
+            Err(()) => {
                 // Do not set error since task was cancelled externally.
                 // Should respond with ConnectionClosed in main task
                 break;
@@ -278,7 +280,7 @@ impl Connection {
         password: Option<&str>,
         salt: &[u8],
     ) -> Result<(), Error> {
-        let mut request = EncodedRequest::new(Auth::new(user, password, salt), None).unwrap();
+        let mut request = EncodedRequest::new(&Auth::new(user, password, salt), None).unwrap();
         *request.sync_mut() = sync;
 
         trace!("Sending auth request");
@@ -306,8 +308,7 @@ impl Connection {
     fn handle_response(connection_data: &mut ConnectionData, response: Response) {
         trace!(
             "Received response for sync {}, schema version {}",
-            response.sync,
-            response.schema_version
+            response.sync, response.schema_version
         );
         connection_data.respond_to_client(response.sync, Ok(response));
     }
@@ -390,14 +391,14 @@ impl Connection {
                 not_sent_requests.extend(not_sent_requests_from_writer);
 
                 if let Err((sync, err)) = result {
-                    data.respond_to_client(sync, Err(err.into()))
+                    data.respond_to_client(sync, Err(err.into()));
                 }
             }
         }
 
         // Respond to all in flights with error
         data.send_error_to_all_in_flights(
-            result
+            &result
                 .clone()
                 .err()
                 .unwrap_or(ConnectionError::ConnectionClosed),

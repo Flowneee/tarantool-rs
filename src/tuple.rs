@@ -3,6 +3,10 @@ use std::io::Write;
 use crate::errors::EncodingError;
 
 pub trait TupleElement {
+    /// # Errors
+    ///
+    /// Returns an error if the value cannot be encoded as `MessagePack`
+    /// or written into `buf`.
     fn encode_into_writer<W: Write>(&self, buf: W) -> Result<(), EncodingError>;
 }
 
@@ -14,18 +18,24 @@ impl<T: serde::Serialize> TupleElement for T {
 }
 
 /// Trait, describing type, which can be encoded into
-/// MessagePack tuple.
+/// `MessagePack` tuple.
 ///
 /// It is mostly used to pass arguments to Tarantool requests,
 /// like passing arguments for `CALL`.
 pub trait Tuple {
+    /// # Errors
+    ///
+    /// Returns an error if the value cannot be encoded as `MessagePack`
+    /// or written into `buf`.
     fn encode_into_writer<W: Write>(&self, buf: W) -> Result<(), EncodingError>;
 }
 
 impl<T: TupleElement> Tuple for Vec<T> {
+    // A tuple longer than u32::MAX elements is not representable in IPROTO anyway.
+    #[allow(clippy::cast_possible_truncation)]
     fn encode_into_writer<W: Write>(&self, mut buf: W) -> Result<(), EncodingError> {
         rmp::encode::write_array_len(&mut buf, self.len() as u32)?;
-        for x in self.iter() {
+        for x in self {
             x.encode_into_writer(&mut buf)?;
         }
         Ok(())
@@ -33,9 +43,11 @@ impl<T: TupleElement> Tuple for Vec<T> {
 }
 
 impl<T: TupleElement> Tuple for &[T] {
+    // A tuple longer than u32::MAX elements is not representable in IPROTO anyway.
+    #[allow(clippy::cast_possible_truncation)]
     fn encode_into_writer<W: Write>(&self, mut buf: W) -> Result<(), EncodingError> {
         rmp::encode::write_array_len(&mut buf, self.len() as u32)?;
-        for x in self.iter() {
+        for x in *self {
             x.encode_into_writer(&mut buf)?;
         }
         Ok(())
@@ -69,6 +81,8 @@ macro_rules! impl_tuple_for_tuple {
     ( $param:tt, $($params:tt),* ) => {
         impl<$param : $crate::TupleElement , $($params : $crate::TupleElement,)*> Tuple for ($param, $($params,)*) {
             #[allow(non_snake_case)]
+            // The element count is a compile-time constant far below u32::MAX.
+            #[allow(clippy::cast_possible_truncation)]
             fn encode_into_writer<W: Write>(&self, mut buf: W) -> Result<(), EncodingError> {
                 rmp::encode::write_array_len(&mut buf, count_tts!($param $($params)+) as u32)?;
 
@@ -94,7 +108,7 @@ macro_rules! count_tts {
 }
 
 macro_rules! replace_expr {
-    ($_t:tt $sub:expr) => {
+    ($_t:tt $sub:expr_2021) => {
         $sub
     };
 }

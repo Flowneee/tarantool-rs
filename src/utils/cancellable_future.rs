@@ -30,7 +30,7 @@ where
     }
 }
 
-impl<'a, F, T> Future for CancellableFuture<'a, F, T>
+impl<F, T> Future for CancellableFuture<'_, F, T>
 where
     F: Future<Output = T>,
 {
@@ -41,7 +41,7 @@ where
         match this.first_future.poll(cx) {
             Poll::Ready(x) => Poll::Ready(Ok(x)),
             Poll::Pending => match this.cancel_future.poll(cx) {
-                Poll::Ready(_) => Poll::Ready(Err(())),
+                Poll::Ready(()) => Poll::Ready(Err(())),
                 Poll::Pending => Poll::Pending,
             },
         }

@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crate::{
     codec::{
-        consts::{keys, RequestType},
+        consts::{RequestType, keys},
         utils::write_kv_str,
     },
     errors::EncodingError,
@@ -15,7 +15,7 @@ pub(crate) struct Prepare<'a> {
     sql_query: &'a str,
 }
 
-impl<'a> Request for Prepare<'a> {
+impl Request for Prepare<'_> {
     fn request_type() -> RequestType
     where
         Self: Sized,

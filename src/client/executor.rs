@@ -4,9 +4,9 @@ use async_trait::async_trait;
 use rmpv::Value;
 
 use crate::{
-    client::{private::Sealed, Stream, Transaction, TransactionBuilder},
-    codec::request::EncodedRequest,
     Result,
+    client::{Stream, Transaction, TransactionBuilder, private::Sealed},
+    codec::request::EncodedRequest,
 };
 
 /// Type, which can make requests to Tarantool and create streams and transactions.
@@ -101,6 +101,7 @@ mod ui {
 
     #[test]
     fn calling_conn_like_on_boxed_dyn_executor() {
+        #[allow(clippy::borrowed_box)]
         async fn _f(conn: &Box<dyn Executor>) -> Result<()> {
             conn.ping().await
         }

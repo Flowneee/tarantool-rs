@@ -5,12 +5,12 @@ use std::{
 
 use anyhow::Context;
 use rmpv::Value;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 
-use super::{Index, IndexMetadata, OwnedIndex, SchemaEntityKey, SystemSpacesId, PRIMARY_INDEX_ID};
+use super::{Index, IndexMetadata, OwnedIndex, PRIMARY_INDEX_ID, SchemaEntityKey, SystemSpacesId};
 use crate::{
-    client::ExecutorExt, tuple::Tuple, utils::UniqueIdNameMap, DmoResponse, Error, Executor,
-    IteratorType, Result, Transaction,
+    DmoResponse, Error, Executor, IteratorType, Result, Transaction, client::ExecutorExt,
+    tuple::Tuple, utils::UniqueIdNameMap,
 };
 
 /// Space metadata with its indices metadata from [system views](https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_space/system_views/).
@@ -19,7 +19,7 @@ pub struct SpaceMetadata {
     pub(super) id: u32,
     owner_id: u32,
     name: String,
-    _engine: String, // TODO: enum
+    engine: String, // TODO: enum
     _fields_count: u32,
     _flags: Value,       // TODO: parse flags
     _format: Vec<Value>, // TODO: parse format or remove it entirely
@@ -31,11 +31,11 @@ impl fmt::Debug for SpaceMetadata {
             .field("id", &self.id)
             .field("owner_id", &self.owner_id)
             .field("name", &self.name)
-            .field("engine", &self._engine)
+            .field("engine", &self.engine)
             // TODO: uncomment when fields implemented
             // .field("_flags", &self._flags)
             // .field("_format", &self._format)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -59,16 +59,19 @@ impl SpaceMetadata {
     }
 
     /// Returns the id of this space.
+    #[must_use]
     pub fn id(&self) -> u32 {
         self.id
     }
 
     /// Returns user id of ther owner of this space.
+    #[must_use]
     pub fn owner_id(&self) -> u32 {
         self.owner_id
     }
 
     /// Returns a name of this space.
+    #[must_use]
     pub fn name(&self) -> &str {
         self.name.as_ref()
     }
@@ -121,11 +124,11 @@ impl<E> Space<E> {
         self.executor
     }
 
-    pub fn primary_index(&self) -> Index<&E> {
+    pub fn primary_index(&self) -> Index<'_, &E> {
         Index::new(&self.executor, &self.primary_index_metadata, &self.metadata)
     }
 
-    pub fn index(&self, key: impl Into<SchemaEntityKey>) -> Option<Index<&E>> {
+    pub fn index(&self, key: impl Into<SchemaEntityKey>) -> Option<Index<'_, &E>> {
         self.get_index(key)
             .map(|index| Index::new(&self.executor, index, &self.metadata))
     }
@@ -176,7 +179,7 @@ impl<E: Executor> Space<E> {
     }
 
     /// Iterator over indices in this space.
-    pub fn indices(&self) -> impl Iterator<Item = Index<&E>> {
+    pub fn indices(&self) -> impl Iterator<Item = Index<'_, &E>> {
         self.indices_metadata
             .iter()
             .map(|index| Index::new(&self.executor, index, &self.metadata))
@@ -185,6 +188,10 @@ impl<E: Executor> Space<E> {
     /// Call `select` with primary index on current space.
     ///
     /// For details see [`ExecutorExt::select`].
+    /// # Errors
+    ///
+    /// Returns an error if the request failed or the result cannot be
+    /// deserialized into `T`.
     pub async fn select<T, A>(
         &self,
         limit: Option<u32>,
@@ -211,6 +218,10 @@ impl<E: Executor> Space<E> {
     /// Call `insert` on current space.
     ///
     /// For details see [`ExecutorExt::insert`].
+    /// # Errors
+    ///
+    /// Returns an error if the request failed to reach Tarantool or
+    /// Tarantool responded with an error.
     pub async fn insert<T>(&self, tuple: T) -> Result<DmoResponse>
     where
         T: Tuple + Send,
@@ -221,6 +232,10 @@ impl<E: Executor> Space<E> {
     /// Call `update` with primary index on current space.
     ///
     /// For details see [`ExecutorExt::update`].
+    /// # Errors
+    ///
+    /// Returns an error if the request failed to reach Tarantool or
+    /// Tarantool responded with an error.
     pub async fn update<K, O>(&self, keys: K, ops: O) -> Result<DmoResponse>
     where
         K: Tuple + Send,
@@ -234,6 +249,10 @@ impl<E: Executor> Space<E> {
     /// Call `upsert` on current space.
     ///
     /// For details see [`ExecutorExt::upsert`].
+    /// # Errors
+    ///
+    /// Returns an error if the request failed to reach Tarantool or
+    /// Tarantool responded with an error.
     pub async fn upsert<T, O>(&self, tuple: T, ops: O) -> Result<DmoResponse>
     where
         T: Tuple + Send,
@@ -245,6 +264,10 @@ impl<E: Executor> Space<E> {
     /// Call `replace` on current space.
     ///
     /// For details see [`ExecutorExt::replace`].
+    /// # Errors
+    ///
+    /// Returns an error if the request failed to reach Tarantool or
+    /// Tarantool responded with an error.
     pub async fn replace<T>(&self, tuple: T) -> Result<DmoResponse>
     where
         T: Tuple + Send,
@@ -255,6 +278,10 @@ impl<E: Executor> Space<E> {
     /// Call `delete` with primary index on current space.
     ///
     /// For details see [`ExecutorExt::delete`].
+    /// # Errors
+    ///
+    /// Returns an error if the request failed to reach Tarantool or
+    /// Tarantool responded with an error.
     pub async fn delete<T>(&self, keys: T) -> Result<DmoResponse>
     where
         T: Tuple + Send,
@@ -267,11 +294,19 @@ impl<E: Executor> Space<E> {
 
 impl Space<Transaction> {
     /// Commit inner tranasction.
+    /// # Errors
+    ///
+    /// Returns an error if the request failed to reach Tarantool or
+    /// Tarantool responded with an error.
     pub async fn commit(self) -> Result<()> {
         self.executor.commit().await
     }
 
     /// Rollback inner tranasction.
+    /// # Errors
+    ///
+    /// Returns an error if the request failed to reach Tarantool or
+    /// Tarantool responded with an error.
     pub async fn rollback(self) -> Result<()> {
         self.executor.rollback().await
     }
@@ -279,9 +314,9 @@ impl Space<Transaction> {
 
 impl<E: Debug> fmt::Debug for Space<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SpaceMetadata")
+        f.debug_struct("Space")
             .field("executor", &self.executor)
             .field("metadata", &self.metadata)
-            .finish()
+            .finish_non_exhaustive()
     }
 }

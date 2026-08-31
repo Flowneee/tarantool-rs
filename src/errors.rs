@@ -19,6 +19,7 @@ pub struct ErrorResponse {
 }
 
 impl ErrorResponse {
+    #[must_use]
     pub fn new(code: u32, description: String, extra: Option<rmpv::Value>) -> Self {
         Self {
             code,
@@ -122,7 +123,7 @@ impl From<Elapsed> for Error {
 #[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum EncodingError {
-    /// Error while encoding data into MessagePack format.
+    /// Error while encoding data into `MessagePack` format.
     #[error("Failed to encode data into MessagePack")]
     MessagePack(#[source] anyhow::Error),
 }
@@ -150,7 +151,7 @@ impl From<rmp_serde::encode::Error> for EncodingError {
 
 /// Errors, related to decoding responses.
 #[derive(Clone, Debug, thiserror::Error)]
-#[error("{kind}{}", DecodingErrorLocation::display_in_error(.location))]
+#[error("{kind}{}", DecodingErrorLocation::display_in_error(.location.as_ref()))]
 pub struct DecodingError {
     #[source]
     kind: Arc<DecodingErrorDetails>,
@@ -205,10 +206,12 @@ impl DecodingError {
         self.with_location(DecodingErrorLocation::Other(other))
     }
 
+    #[must_use]
     pub fn kind(&self) -> &DecodingErrorDetails {
         &self.kind
     }
 
+    #[must_use]
     pub fn location(&self) -> Option<&DecodingErrorLocation> {
         self.location.as_ref()
     }
@@ -243,7 +246,7 @@ pub enum DecodingErrorDetails {
     /// Error while deserializing [`rmpv::Value`] into concrete type.
     #[error("Failed to deserialize rmpv::Value")]
     Serde(#[source] rmpv::ext::Error),
-    /// Error while decoding data from MessagePack format.
+    /// Error while decoding data from `MessagePack` format.
     #[error("Failed to decode data from MessagePack")]
     MessagePack(#[source] anyhow::Error),
 }
@@ -296,7 +299,7 @@ impl fmt::Display for DecodingErrorLocation {
 }
 
 impl DecodingErrorLocation {
-    fn display_in_error(value: &Option<Self>) -> String {
+    fn display_in_error(value: Option<&Self>) -> String {
         if let Some(x) = value {
             format!(" (in {x})")
         } else {

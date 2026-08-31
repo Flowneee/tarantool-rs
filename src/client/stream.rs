@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use rmpv::Value;
 
 use super::{Connection, Transaction, TransactionBuilder};
-use crate::{codec::request::EncodedRequest, Executor, Result};
+use crate::{Executor, Result, codec::request::EncodedRequest};
 
 /// Abstraction, providing sequential processing of requests.
 ///
@@ -84,6 +84,6 @@ impl fmt::Debug for Stream {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Stream")
             .field("stream_id", &self.stream_id)
-            .finish()
+            .finish_non_exhaustive()
     }
 }

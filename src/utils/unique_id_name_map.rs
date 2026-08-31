@@ -112,7 +112,7 @@ impl<T: UniqueIdName> UniqueIdNameMap<T> {
                 )
             }
             (None, Some(right)) => {
-                bail!("New value with id '{}' replaced only by id", right.0.name(),)
+                bail!("New value with id '{}' replaced only by id", right.0.name())
             }
             _ => {}
         }
@@ -177,7 +177,7 @@ impl<T> Clone for UniqueIdNameMap<T> {
 impl<T: fmt::Debug> fmt::Debug for UniqueIdNameMap<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list()
-            .entries(self.by_id.iter().map(|x| (&*x.0)))
+            .entries(self.by_id.iter().map(|x| &*x.0))
             .finish()
     }
 }

@@ -7,11 +7,11 @@ use tracing::debug;
 
 use super::{Connection, ExecutorExt, Stream};
 use crate::{
+    Executor, Result,
     codec::{
         consts::TransactionIsolationLevel,
         request::{Begin, Commit, EncodedRequest, Rollback},
     },
-    Executor, Result,
 };
 
 /// Started transaction ([docs](https://www.tarantool.io/en/doc/latest/dev_guide/internals/box_protocol/#binary-protocol-streams)).
@@ -54,6 +54,10 @@ impl Transaction {
     }
 
     /// Commit tranasction.
+    /// # Errors
+    ///
+    /// Returns an error if the request failed to reach Tarantool or
+    /// Tarantool responded with an error.
     pub async fn commit(mut self) -> Result<()> {
         if !self.finished {
             debug!("Commiting tranasction on stream {}", self.stream_id);
@@ -64,6 +68,10 @@ impl Transaction {
     }
 
     /// Rollback tranasction.
+    /// # Errors
+    ///
+    /// Returns an error if the request failed to reach Tarantool or
+    /// Tarantool responded with an error.
     pub async fn rollback(mut self) -> Result<()> {
         if !self.finished {
             debug!("Rolling back tranasction on stream {}", self.stream_id);
@@ -82,7 +90,7 @@ impl Drop for Transaction {
                 self.stream_id
             );
             self.conn
-                .send_request_sync_and_forget(Rollback::default(), Some(self.stream_id));
+                .send_request_sync_and_forget(&Rollback::default(), Some(self.stream_id));
             self.finished = true;
         }
     }
@@ -118,7 +126,7 @@ impl fmt::Debug for Transaction {
         f.debug_struct("Transaction")
             .field("stream_id", &self.stream_id)
             .field("finished", &self.finished)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -152,6 +160,9 @@ impl TransactionBuilder {
         self
     }
 
+    /// # Errors
+    ///
+    /// Returns an error if the transaction could not be started.
     pub async fn begin(&self) -> Result<Transaction> {
         Transaction::new(
             self.connection.clone(),

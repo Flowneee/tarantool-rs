@@ -25,20 +25,20 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Decode returned tuple entirely
     let resp: (u64, Value) = conn.call("f", ()).await?.decode_full()?;
-    println!("{:?}", resp);
+    println!("{resp:?}");
 
     // Decode first element
     let resp: u64 = conn.call("f", ()).await?.decode_first()?;
-    println!("{:?}", resp);
+    println!("{resp:?}");
 
     // Decode returned tuple as result. Since second element is null,
     // decode to Ok(u64)
     let resp: u64 = conn.call("f", ()).await?.decode_result()?;
-    println!("{:?}", resp);
+    println!("{resp:?}");
 
     // Decode returned tuple entirely into type
     let resp: Response = conn.call("f", ()).await?.decode_full()?;
-    println!("{:?}", resp);
+    println!("{resp:?}");
 
     Ok(())
 }

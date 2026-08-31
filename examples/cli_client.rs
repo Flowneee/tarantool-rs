@@ -1,6 +1,6 @@
 use clap::Parser;
-use rustyline::{error::ReadlineError, DefaultEditor};
-use tarantool_rs::*;
+use rustyline::{DefaultEditor, error::ReadlineError};
+use tarantool_rs::{Connection, ExecutorExt, Value};
 
 const HISTORY_FILE: &str = "/tmp/tarantool_rs_cli_client_history.txt";
 
@@ -28,16 +28,13 @@ async fn main() -> std::result::Result<(), anyhow::Error> {
         match readline {
             Ok(line) => {
                 let _ = rl.add_history_entry(line.as_str());
-                process_input(&conn, line).await
+                process_input(&conn, line).await;
             }
-            Err(ReadlineError::Interrupted) => {
-                break;
-            }
-            Err(ReadlineError::Eof) => {
+            Err(ReadlineError::Interrupted | ReadlineError::Eof) => {
                 break;
             }
             Err(err) => {
-                println!("Error: {}", err);
+                println!("Error: {err}");
                 break;
             }
         }
@@ -47,16 +44,16 @@ async fn main() -> std::result::Result<(), anyhow::Error> {
 }
 
 async fn process_input(conn: &Connection, line: String) {
-    let query = format!("return ({})", line);
+    let query = format!("return ({line})");
     match conn
         .eval::<_, _>(query, ())
         .await
-        .and_then(|resp| Ok(resp.decode_full()?))
+        .and_then(|resp| Ok(resp.decode_full::<Value>()?))
     {
         Ok(x) => println!(
             "Result: {}",
             serde_json::to_string(&x).expect("All MessagePack values should be valid for JSON")
         ),
-        Err(err) => eprintln!("Error: {}", err),
+        Err(err) => eprintln!("Error: {err}"),
     }
 }

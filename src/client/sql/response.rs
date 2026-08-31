@@ -15,6 +15,10 @@ pub struct SqlResponse(pub(crate) rmpv::Value);
 
 impl SqlResponse {
     /// Decode as response on `SELECT`.
+    /// # Errors
+    ///
+    /// Returns an error if the data cannot be deserialized into the
+    /// requested type.
     pub fn decode_select<T>(self) -> Result<Vec<T>, DecodingError>
     where
         T: DeserializeOwned,
@@ -27,6 +31,10 @@ impl SqlResponse {
     /// Decode as data list in `IPROTO_DATA` tag.
     ///
     /// This is currently used for `SELECT`, `PRAGMA` and `VALUES` responses.
+    /// # Errors
+    ///
+    /// Returns an error if the data cannot be deserialized into the
+    /// requested type.
     pub fn decode_data_vec<T>(self) -> Result<Vec<T>, DecodingError>
     where
         T: DeserializeOwned,
@@ -43,6 +51,9 @@ impl SqlResponse {
     }
 
     /// Get number of affected rows.
+    /// # Errors
+    ///
+    /// Returns an error if the response does not contain a row count.
     pub fn row_count(self) -> Result<u64, DecodingError> {
         let sql_info = self.decode_sql_info_raw()?;
         find_and_take_single_key_in_map(keys::SQL_INFO_ROW_COUNT, sql_info)

@@ -11,7 +11,7 @@ pub(crate) use self::{
 
 use std::io::Write;
 
-use super::consts::{keys, RequestType};
+use super::consts::{RequestType, keys};
 
 mod auth;
 mod begin;
@@ -42,7 +42,7 @@ pub trait Request {
     where
         Self: Sized;
 
-    /// Encode body into MessagePack and write it to provided [`Write`].
+    /// Encode body into `MessagePack` and write it to provided [`Write`].
     ///
     /// Currently all implementation in this crate uses [`rmp::encode`],
     /// which throw errors only if used `Write` throw an error. And since internally
@@ -65,7 +65,7 @@ pub struct EncodedRequest {
 }
 
 impl EncodedRequest {
-    pub fn new<Body: Request>(body: Body, stream_id: Option<u32>) -> Result<Self, EncodingError> {
+    pub fn new<Body: Request>(body: &Body, stream_id: Option<u32>) -> Result<Self, EncodingError> {
         let mut buf = BytesMut::with_capacity(DEFAULT_ENCODE_BUFFER_SIZE).writer();
         body.encode(&mut buf)?;
         Ok(Self {
@@ -78,9 +78,8 @@ impl EncodedRequest {
     }
 
     pub fn encode(&self, mut buf: impl Write) -> Result<(), EncodingError> {
-        let map_len = 2
-            + if self.schema_version.is_some() { 1 } else { 0 }
-            + if self.stream_id.is_some() { 1 } else { 0 };
+        let map_len =
+            2 + u32::from(self.schema_version.is_some()) + u32::from(self.stream_id.is_some());
         rmp::encode::write_map_len(&mut buf, map_len)?;
         rmp::encode::write_pfix(&mut buf, keys::REQUEST_TYPE)?;
         rmp::encode::write_u8(&mut buf, self.request_type as u8)?;

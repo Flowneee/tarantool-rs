@@ -54,7 +54,7 @@ pub enum RequestType {
     Auth = 7,
     Eval = 8,
     Upsert = 9,
-    /// CALL request - returns arbitrary MessagePack
+    /// CALL request - returns arbitrary `MessagePack`
     Call = 10,
     /// Execute an SQL statement
     Execute = 11,
@@ -81,10 +81,11 @@ pub mod response_codes {
 /// Transaction isolation level.
 ///
 /// See docs [here](https://www.tarantool.io/en/doc/latest/concepts/atomic/txn_mode_mvcc/#txn-mode-mvcc-options).
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 #[repr(u8)]
 pub enum TransactionIsolationLevel {
     /// Use the default level from box.cfg (default),
+    #[default]
     Default = 0,
     /// Read changes that are committed but not confirmed yet.
     ReadCommited = 1,
@@ -94,18 +95,13 @@ pub enum TransactionIsolationLevel {
     BestEffort = 3,
 }
 
-impl Default for TransactionIsolationLevel {
-    fn default() -> Self {
-        Self::Default
-    }
-}
-
 /// Iterator type for `select` requests.
 ///
 /// For details check Tarantool documantation <https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_index/pairs/>.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 #[repr(u8)]
 pub enum IteratorType {
+    #[default]
     Eq = 0,
     Req = 1,
     All = 2,
@@ -118,10 +114,4 @@ pub enum IteratorType {
     BitsAlLNotSet = 9,
     Overlaps = 10,
     Neighvor = 11,
-}
-
-impl Default for IteratorType {
-    fn default() -> Self {
-        Self::Eq
-    }
 }

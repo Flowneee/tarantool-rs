@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crate::{
     codec::{
-        consts::{keys, IteratorType, RequestType},
+        consts::{IteratorType, RequestType, keys},
         utils::{write_kv_tuple, write_kv_u32},
     },
     errors::EncodingError,

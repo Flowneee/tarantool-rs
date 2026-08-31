@@ -1,10 +1,9 @@
 [package]
 name = "tarantool-test-container"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+rust-version = "1.97"
 
 
 [dependencies]
-testcontainers = { git = "https://github.com/testcontainers/testcontainers-rs.git", features = ["experimental", "watchdog"] }
-maplit = "1"
-rental = "0.5"
+testcontainers = { version = "0.28", features = ["blocking", "watchdog"] }

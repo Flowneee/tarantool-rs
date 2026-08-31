@@ -1,5 +1,5 @@
 use anyhow::Context;
-use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD_NO_PAD};
 use bytes::{Buf, BufMut, BytesMut};
 use rmp::Marker;
 use tokio_util::codec::{Decoder, Encoder};
@@ -7,8 +7,8 @@ use tracing::trace;
 
 use self::{request::EncodedRequest, response::Response};
 use crate::{
-    errors::{CodecDecodeError, CodecEncodeError, DecodingError},
     Error,
+    errors::{CodecDecodeError, CodecEncodeError, DecodingError},
 };
 
 pub mod consts;
@@ -16,16 +16,12 @@ pub mod request;
 pub mod response;
 pub mod utils;
 
+#[derive(Default)]
 enum LengthDecoder {
+    #[default]
     NoMarker,
     Marker(Marker),
     Value(usize),
-}
-
-impl Default for LengthDecoder {
-    fn default() -> Self {
-        Self::NoMarker
-    }
 }
 
 impl LengthDecoder {
@@ -70,6 +66,8 @@ impl LengthDecoder {
                     return Ok(None);
                 }
             }
+            // Payload length of a sane message fits in usize on all supported targets.
+            #[allow(clippy::cast_possible_truncation)]
             Marker::U64 => {
                 //
                 if src.len() > 8 {
@@ -81,8 +79,8 @@ impl LengthDecoder {
             rest => {
                 return Err(DecodingError::type_mismatch(
                     "unsigned integer",
-                    format!("{:?}", rest),
-                ))
+                    format!("{rest:?}"),
+                ));
             }
         };
         trace!("decoded frame length: {}", length);
@@ -91,7 +89,7 @@ impl LengthDecoder {
     }
 
     fn reset(&mut self) {
-        *self = LengthDecoder::NoMarker
+        *self = LengthDecoder::NoMarker;
     }
 }
 

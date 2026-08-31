@@ -1,7 +1,7 @@
 use rmpv::Value;
 use serde::de::DeserializeOwned;
 
-use crate::{errors::DecodingError, utils::extract_iproto_data, Error};
+use crate::{Error, errors::DecodingError, utils::extract_iproto_data};
 
 /// Tuple, returned from `call` and `eval` requests.
 #[derive(Clone, Debug, PartialEq)]
@@ -11,6 +11,10 @@ impl CallResponse {
     /// Decode first element of the tuple, dropping everything else.
     ///
     /// This is useful if function doesn't return an error.
+    /// # Errors
+    ///
+    /// Returns an error if the data cannot be deserialized into the
+    /// requested type.
     pub fn decode_first<T>(self) -> Result<T, DecodingError>
     where
         T: DeserializeOwned,
@@ -24,22 +28,20 @@ impl CallResponse {
     }
 
     /// Decode first 2 elements of the tuple, dropping everything else.
+    /// # Errors
+    ///
+    /// Returns an error if the data cannot be deserialized into the
+    /// requested types.
     pub fn decode_two<T1, T2>(self) -> Result<(T1, T2), DecodingError>
     where
         T1: DeserializeOwned,
         T2: DeserializeOwned,
     {
         let mut tuple_iter = self.into_data_tuple()?.into_iter();
-        if tuple_iter.len() < 2 {
-            return Err(DecodingError::invalid_tuple_length(2, tuple_iter.len()));
-        }
-        // SAFETY: this should be safe since we just checked tuple length
-        let first = tuple_iter
-            .next()
-            .expect("tuple_iter should have length >= 2");
-        let second = tuple_iter
-            .next()
-            .expect("tuple_iter should have length >= 2");
+        let len = tuple_iter.len();
+        let (Some(first), Some(second)) = (tuple_iter.next(), tuple_iter.next()) else {
+            return Err(DecodingError::invalid_tuple_length(2, len));
+        };
         Ok((
             rmpv::ext::from_value(first)?,
             rmpv::ext::from_value(second)?,
@@ -52,6 +54,10 @@ impl CallResponse {
     ///
     /// If second element is `nil` or not present, first element will be returned,
     /// otherwise second element will be returned as error.
+    /// # Errors
+    ///
+    /// Returns an error if the data cannot be deserialized into the
+    /// requested type.
     pub fn decode_result<T>(self) -> Result<T, Error>
     where
         T: DeserializeOwned,
@@ -73,6 +79,10 @@ impl CallResponse {
     ///
     /// Note that currently every response would be a tuple, so be careful what type
     /// you are specifying.
+    /// # Errors
+    ///
+    /// Returns an error if the data cannot be deserialized into the
+    /// requested type.
     pub fn decode_full<T>(self) -> Result<T, DecodingError>
     where
         T: DeserializeOwned,

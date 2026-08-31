@@ -1,9 +1,10 @@
 use async_trait::async_trait;
-use futures::{future::BoxFuture, FutureExt};
+use futures::{FutureExt, future::BoxFuture};
 use rmpv::Value;
 use serde::de::DeserializeOwned;
 
 use crate::{
+    CallResponse, DmoResponse, Executor, IteratorType, PreparedSqlStatement, Result, SqlResponse,
     codec::request::{
         Call, Delete, EncodedRequest, Eval, Execute, Insert, Ping, Prepare, Replace, Request,
         Select, Update, Upsert,
@@ -11,7 +12,6 @@ use crate::{
     schema::{SchemaEntityKey, Space},
     tuple::Tuple,
     utils::extract_and_deserialize_iproto_data,
-    CallResponse, DmoResponse, Executor, IteratorType, PreparedSqlStatement, Result, SqlResponse,
 };
 
 /// Helper trait around [`Executor`] trait, which allows to send specific requests
@@ -22,7 +22,7 @@ pub trait ExecutorExt: Executor {
     ///
     /// It is not recommended to use this method directly, since some requests
     /// should be only sent in specific situations and might break connection.
-    fn send_request<R>(&self, body: R) -> BoxFuture<Result<Value>>
+    fn send_request<R>(&self, body: R) -> BoxFuture<'_, Result<Value>>
     where
         R: Request;
 
@@ -200,11 +200,11 @@ pub trait ExecutorExt: Executor {
 
 #[async_trait]
 impl<E: Executor + ?Sized> ExecutorExt for E {
-    fn send_request<R>(&self, body: R) -> BoxFuture<Result<Value>>
+    fn send_request<R>(&self, body: R) -> BoxFuture<'_, Result<Value>>
     where
         R: Request,
     {
-        let req = EncodedRequest::new(body, None);
+        let req = EncodedRequest::new(&body, None);
         async move { (*self).send_encoded_request(req?).await }.boxed()
     }
 }

@@ -13,6 +13,10 @@ impl DmoResponse {
     /// Decode row into type.
     ///
     /// Raises error if no rows returned.
+    /// # Errors
+    ///
+    /// Returns an error if the data cannot be deserialized into the
+    /// requested type.
     pub fn decode<T>(self) -> Result<T, DecodingError>
     where
         T: DeserializeOwned,
@@ -26,6 +30,10 @@ impl DmoResponse {
     }
 
     /// Decode row into type or return `None` if no rows returned.
+    /// # Errors
+    ///
+    /// Returns an error if the data cannot be deserialized into the
+    /// requested type.
     pub fn decode_opt<T>(self) -> Result<Option<T>, DecodingError>
     where
         T: DeserializeOwned,

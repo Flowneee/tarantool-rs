@@ -1,11 +1,9 @@
 use std::time::{Duration, Instant};
 
-use futures::{stream::repeat_with, StreamExt};
+use futures::{StreamExt, stream::repeat_with};
 use tarantool_rs::{Connection, ExecutorExt};
 
-type TarantoolTestContainer = tarantool_test_container::TarantoolTestContainer<
-    tarantool_test_container::TarantoolDefaultArgs,
->;
+use tarantool_test_container::TarantoolTestContainer;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -31,7 +29,8 @@ async fn main() -> Result<(), anyhow::Error> {
     let interval = Duration::from_secs(interval_secs);
 
     let mut stream = repeat_with(|| conn.ping()).buffer_unordered(1000);
-    while let _ = stream.next().await {
+    loop {
+        let _ = stream.next().await;
         counter += 1;
         if last_measured_ts.elapsed() > interval {
             last_measured_ts = Instant::now();
@@ -43,6 +42,4 @@ async fn main() -> Result<(), anyhow::Error> {
             );
         }
     }
-
-    Ok(())
 }

@@ -3,7 +3,7 @@ use std::time::Duration;
 use assert_matches::assert_matches;
 use rmpv::Value;
 use serde::{Deserialize, Serialize};
-use tarantool_rs::{errors::Error, Connection, Executor, ExecutorExt};
+use tarantool_rs::{Connection, Executor, ExecutorExt, errors::Error};
 use tracing_test::traced_test;
 
 use crate::common::{TarantoolTestContainer, TarantoolTestContainerExt};

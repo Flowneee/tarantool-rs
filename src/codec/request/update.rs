@@ -2,14 +2,14 @@ use std::io::Write;
 
 use crate::{
     codec::{
-        consts::{keys, RequestType},
+        consts::{RequestType, keys},
         utils::{write_kv_tuple, write_kv_u32},
     },
     errors::EncodingError,
     tuple::Tuple,
 };
 
-use super::{Request, INDEX_BASE_VALUE};
+use super::{INDEX_BASE_VALUE, Request};
 
 // TODO: replace keys with structured operations description
 #[derive(Clone, Debug)]

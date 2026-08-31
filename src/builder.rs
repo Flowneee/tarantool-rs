@@ -33,6 +33,7 @@ impl Default for ReconnectInterval {
 
 impl ReconnectInterval {
     /// Fixed interval between reconnection attempts.
+    #[must_use]
     pub fn fixed(interval: Duration) -> Self {
         Self::Fixed(interval)
     }
@@ -40,7 +41,14 @@ impl ReconnectInterval {
     /// Interval between reconnection attempts calculated as
     /// exponentially growing period.
     ///
-    /// For details on this values check [`backoff::ExponentialBackoff`] docs.
+    /// Each attempt the interval is randomized within
+    /// `[1 - randomization_factor, 1 + randomization_factor]` of its current
+    /// value and then grows by `multiplier`, capped at `max_interval`
+    /// (mirrors the behavior of the former `backoff` crate).
+    ///
+    /// `randomization_factor` is clamped to `[0.0, 1.0]` and `multiplier`
+    /// to `[0.0, +inf)`; `NaN` falls back to `0.0` and `1.0` respectively.
+    #[must_use]
     pub fn exponential_backoff(
         min_interval: Duration,
         max_interval: Duration,
@@ -77,7 +85,7 @@ impl Default for ConnectionBuilder {
             password: None,
             timeout: None,
             transaction_timeout: None,
-            transaction_isolation_level: Default::default(),
+            transaction_isolation_level: TransactionIsolationLevel::default(),
             connect_timeout: None,
             reconnect_interval: Some(ReconnectInterval::default()),
             sql_statement_cache_capacity: DEFAULT_SQL_STATEMENT_CACHE_CAPACITY,
@@ -88,6 +96,10 @@ impl Default for ConnectionBuilder {
 
 impl ConnectionBuilder {
     /// Create connection to Tarantool using provided address.
+    /// # Errors
+    ///
+    /// Returns an error if the connection to Tarantool cannot be
+    /// established or authentication fails.
     pub async fn build<A>(&self, addr: A) -> Result<Connection, Error>
     where
         A: ToSocketAddrs + Display + Clone + Send + Sync + 'static,
